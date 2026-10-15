@@ -502,6 +502,10 @@
     let selectedBall = 1;
     let map = null, markers = {}, userMarker = null;
 
+    // 方位管理用の変数
+    let gpsInitialized = false;
+    let headingOffset = 0;
+
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
       gpsStatus.classList.remove("ok", "ng", "wait");
@@ -554,18 +558,22 @@
         const dot = dots[i];
         if(!dot) return;
         if(ball.lat == null || ball.lng == null){
-          dot.classList.remove("show");
+          dot.classList.remove("show", "fast-blink");
           return;
         }
         const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
         if(dist > range){
-          dot.classList.remove("show");
+          dot.classList.remove("show", "fast-blink");
           return;
         }
-        const brng = toRad(bearingDeg(userPos.lat, userPos.lng, ball.lat, ball.lng));
+        // 方位オフセット（headingOffset）を角度に反映する
+        const rawBrng = bearingDeg(userPos.lat, userPos.lng, ball.lat, ball.lng);
+        const adjustedBrng = (rawBrng - headingOffset + 360) % 360;
+        const brngRad = toRad(adjustedBrng);
+
         const r = (dist / range) * 42;
-        const left = 50 + Math.sin(brng) * r;
-        const top = 53 - Math.cos(brng) * r;
+        const left = 50 + Math.sin(brngRad) * r;
+        const top = 53 - Math.cos(brngRad) * r;
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
@@ -658,54 +666,92 @@
       );
     }
 
-    function requestGps(){
-      if(!navigator.geolocation){
-        setGpsStatus("この端末では位置情報を使えません", "ng");
-        busy = false;
-        return;
+    // 方位スキャン機能（2回目以降のボタン押下時）
+    function scanHeading(){
+      setGpsStatus("方位をスキャンしています…", "wait");
+
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(response => {
+          if (response === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, { once: true });
+          } else {
+            setGpsStatus("方位センサーの許可が拒否されました", "ng");
+          }
+        }).catch(() => {
+          setGpsStatus("方位の取得に失敗しました", "ng");
+        });
+      } else if ('ondeviceorientation' in window) {
+        window.addEventListener('deviceorientation', handleOrientation, { once: true });
+      } else {
+        setGpsStatus("この端末は方位センサーに対応していません", "ng");
       }
-      setGpsStatus("位置情報の許可を確認しています…", "wait");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          applyUserPosition(pos.coords.latitude, pos.coords.longitude);
-          setGpsStatus("位置情報：許可されました", "ok");
-          screen.classList.add("on");
-          showBallsLater();
-          startWatch();
-          busy = false;
-        },
-        (err) => {
-          setGpsStatus(geoErrorMessage(err), "ng");
-          screen.classList.remove("on");
-          busy = false;
-        },
-        {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
-      );
     }
 
-    function scanGps(){
+    function handleOrientation(event){
+      const alpha = event.alpha;
+      if(alpha != null){
+        headingOffset = alpha;
+        placeBallsOnRadar();
+        setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+      } else {
+        setGpsStatus("方位データを取得できませんでした", "ng");
+      }
+    }
+
+    // 1回目：GPS取得＆表示、2回目以降：方位スキャンに切り替えるメイン関数
+    function handleScanButton(){
       if(busy) return;
       busy = true;
       playPochitt();
-      if(!isSecure){
-        setGpsStatus("HTTPSのページではないため、位置情報の許可画面を出せません", "ng");
+
+      if(!gpsInitialized){
+        if(!isSecure){
+          setGpsStatus("HTTPSのページではないため、位置情報の許可画面を出せません", "ng");
+          busy = false;
+          return;
+        }
+        if(!navigator.geolocation){
+          setGpsStatus("この端末では位置情報を使えません", "ng");
+          busy = false;
+          return;
+        }
+        setGpsStatus("位置情報の許可を確認しています…", "wait");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            applyUserPosition(pos.coords.latitude, pos.coords.longitude);
+            setGpsStatus("位置情報：取得完了（タップで方位スキャン）", "ok");
+            screen.classList.add("on");
+            showBallsLater();
+            startWatch();
+            gpsInitialized = true; // 次回から方位スキャンに切り替え
+            busy = false;
+          },
+          (err) => {
+            setGpsStatus(geoErrorMessage(err), "ng");
+            screen.classList.remove("on");
+            busy = false;
+          },
+          {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
+        );
+      } else {
+        scanHeading();
         busy = false;
-        return;
       }
-      requestGps();
     }
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
     function pressOff(){ btn.classList.remove("pressed"); document.querySelector(".radar-shell").classList.remove("knob-pressed"); }
+    
+    // ボタンのイベントを handleScanButton に紐付け
     btn.addEventListener("pointerdown", (e) => { e.preventDefault(); pressOn(); });
-    btn.addEventListener("pointerup", () => { pressOff(); scanGps(); });
+    btn.addEventListener("pointerup", () => { pressOff(); handleScanButton(); });
     btn.addEventListener("pointercancel", pressOff);
     btn.addEventListener("pointerleave", pressOff);
     btn.addEventListener("keydown", (e) => {
       if(e.key === "Enter" || e.key === " "){
         e.preventDefault();
         pressOn();
-        scanGps();
+        handleScanButton();
         setTimeout(pressOff, 90);
       }
     });
