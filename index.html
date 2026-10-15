@@ -57,7 +57,7 @@
       align-items:flex-end;
       gap:.01em;
       font-family:"Archivo Black", Impact, "Arial Black", sans-serif;
-      font-size:clamp(44px, 15vw, 88px);
+      font-size:clamp(46px, 16vw, 94px);
       font-weight:400;
       line-height:1;
       white-space:nowrap;
@@ -108,12 +108,12 @@
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:clamp(24px, 7vw, 40px);
-      height:clamp(24px, 7vw, 40px);
+      width:clamp(26px, 7.5vw, 44px);
+      height:clamp(26px, 7.5vw, 44px);
       background:#ffe500;
       border-radius:50%;
       font-family:"Noto Sans JP",sans-serif;
-      font-size:clamp(13px, 3.8vw, 21px);
+      font-size:clamp(14px, 4.1vw, 23px);
       font-weight:500;
       color:#000;
       line-height:1;
@@ -123,10 +123,10 @@
     }
 
     .radar-shell{
-      width:min(96vw, 510px, calc(100dvh - 210px));
+      width:min(98vw, 550px, calc(100dvh - 185px));
       aspect-ratio:992 / 1149;
       position:relative;
-      margin-top:12px;
+      margin-top:16px;
       padding:0;
       flex:0 1 auto;
       background-image:url("dragon_radar_device.png");
@@ -404,9 +404,9 @@
 
     @media (max-height:700px){
       .logo{margin-bottom:4px;}
-      .logo-ja{margin-top:6px;}
-      .radar-shell{margin-top:0;width:min(94vw, 440px, calc(100dvh - 170px));} /* ← ここを変更します */
-      .gps-status{margin-top:6px;}
+      .logo-ja{margin-top:4px;}
+      .radar-shell{margin-top:10;width:min(96vw, 480px, calc(100dvh - 145px));} /* ← ここを変更します */
+      .gps-status{margin-top:4px;}
     }
   </style>
 </head>
