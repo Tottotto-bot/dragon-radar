@@ -1,0 +1,7 @@
+{
+  "rangeMeters": 500,
+  "balls": [
+    {"id": 1, "lat": 35.681236, "lng": 139.767125},
+    {"id": 2, "lat": null, "lng": null}
+  ]
+}
