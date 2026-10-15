@@ -665,25 +665,34 @@
         {enableHighAccuracy:false, maximumAge:60000}
       );
     }
-
     // 方位スキャン機能（2回目以降のボタン押下時）
     function scanHeading(){
       setGpsStatus("方位をスキャンしています…", "wait");
 
+      // iOS 13以降のパーミッション要求が必要な場合の処理
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then(response => {
-          if (response === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation, { once: true });
-          } else {
-            setGpsStatus("方位センサーの許可が拒否されました", "ng");
-          }
-        }).catch(() => {
-          setGpsStatus("方位の取得に失敗しました", "ng");
-        });
-      } else if ('ondeviceorientation' in window) {
-        window.addEventListener('deviceorientation', handleOrientation, { once: true });
+        // 同期的に一度リクエストを試す、または直接リスナーを登録してみる
+        DeviceOrientationEvent.requestPermission()
+          .then(response => {
+            if (response === 'granted') {
+              window.addEventListener('deviceorientation', handleOrientation, { once: true });
+            } else {
+              setGpsStatus("方位センサーの許可が拒否されました", "ng");
+            }
+          })
+          .catch(() => {
+            setGpsStatus("方位の取得に失敗しました", "ng");
+          });
       } else {
-        setGpsStatus("この端末は方位センサーに対応していません", "ng");
+        // Androidや許可不要のブラウザ
+        window.addEventListener('deviceorientation', handleOrientation, { once: true });
+        
+        // 万が一イベントが発火しない場合のタイムアウト対策
+        setTimeout(() => {
+          if (headingOffset === 0) {
+            setGpsStatus("方位データが取得できませんでした（端末を動かしてみてください）", "ng");
+          }
+        }, 2000);
       }
     }
 
