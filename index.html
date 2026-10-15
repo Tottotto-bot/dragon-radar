@@ -133,8 +133,6 @@
       background-size:100% 100%;
       background-repeat:no-repeat;
     }
-    .radar-shell::before{display:none;}
-    .radar-shell::after{display:none;}
 
     .knob-art{
       position:absolute;
@@ -170,8 +168,6 @@
       touch-action:manipulation;
       -webkit-tap-highlight-color:transparent;
     }
-    .top-knob::before,.top-knob::after,.top-knob-stem{display:none;}
-    .top-knob.pressed{transform:none;filter:none;}
 
     .screen-wrap{
       position: absolute;
@@ -197,7 +193,6 @@
       border:0;
       box-shadow:none;
     }
-    .grid{position:absolute;inset:0; display:none;}
 
     .scan{
       position:absolute;
@@ -298,8 +293,9 @@
     .gps-status.ng{color:#ff8b82;}
     .gps-status.wait{color:#ffe65b;}
 
+    /* 常に開発者設定ボタンを表示するように修正 */
     .dev-open{
-      display:none;
+      display:block;
       position:fixed;
       right:12px;
       bottom:12px;
@@ -316,7 +312,6 @@
       box-shadow:0 0 0 2px #ffe65b;
       cursor:pointer;
     }
-    body.dev .dev-open{display:block;}
 
     .dev-panel{
       display:none;
@@ -359,6 +354,7 @@
       border-radius:12px;
       overflow:hidden;
       border:1px solid #333;
+      margin-top:8px;
     }
     .dev-row{
       display:flex;
@@ -435,16 +431,10 @@
 
     <div class="radar-shell">
       <div class="knob-art" aria-hidden="true"></div>
-      <div class="top-knob" id="scanBtn" role="button" aria-label="スキャン" tabindex="0">
-        <div class="top-knob-stem"></div>
-      </div>
+      <div class="top-knob" id="scanBtn" role="button" aria-label="スキャン" tabindex="0"></div>
       <div class="screen-wrap">
         <div class="screen" id="screen">
           <div class="scan"></div>
-          <div class="grid">
-            <div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div>
-            <div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div>
-          </div>
           <div class="center-glow"></div>
           <div class="center-dot"></div>
           <div class="target-dot t1" data-id="1"></div>
@@ -486,7 +476,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "dragonRadarConfig";
-    const isDev = new URLSearchParams(location.search).get("dev") === "1";
     const isSecure = window.isSecureContext === true;
     const btn = document.getElementById("scanBtn");
     const screen = document.getElementById("screen");
@@ -505,7 +494,7 @@
     let ballsShown = false;
     let watchId = null;
     let selectedBall = 1;
-    let map, markers = {}, userMarker = null;
+    let map = null, markers = {}, userMarker = null;
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -730,8 +719,8 @@
       markers[ball.id] = L.marker([ball.lat, ball.lng], {title: ball.id + "つ星"}).addTo(map)
         .bindPopup(ball.id + "つ星");
     }
+
     function initDev(){
-      document.body.classList.add("dev");
       const panel = document.getElementById("devPanel");
       const btns = document.getElementById("ballBtns");
       const rangeInput = document.getElementById("rangeInput");
@@ -752,6 +741,7 @@
       syncBallBtns();
       renderDevCoords();
 
+      // Leafletマップの初期化
       map = L.map("devMap").setView([35.681236, 139.767125], 14);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
@@ -765,19 +755,22 @@
 
       config.balls.forEach(upsertMarker);
 
+      // 開閉ボタンのイベント
       document.getElementById("devOpen").onclick = () => {
         panel.classList.add("open");
         setTimeout(() => { 
-          map.invalidateSize(); 
-          if(userPos){
-            map.setView([userPos.lat, userPos.lng], 16);
-            updateUserMarker(userPos.lat, userPos.lng);
+          if(map) {
+            map.invalidateSize(); 
+            if(userPos){
+              map.setView([userPos.lat, userPos.lng], 16);
+              updateUserMarker(userPos.lat, userPos.lng);
+            }
           }
         }, 200);
       };
       document.getElementById("devClose").onclick = () => panel.classList.remove("open");
 
-      // 【追加】現在地を取得ボタンのクリック処理
+      // 現在地を取得ボタン
       document.getElementById("gpsBtn").onclick = () => {
         if(!navigator.geolocation){
           alert("この端末では位置情報を使えません");
@@ -788,7 +781,7 @@
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
             applyUserPosition(lat, lng);
-            map.setView([lat, lng], 16);
+            if(map) map.setView([lat, lng], 16);
             alert("現在地を取得しました。");
           },
           (err) => {
@@ -846,14 +839,16 @@
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           applyUserPosition(lat, lng);
-          map.setView([lat, lng], 16);
+          if(map) map.setView([lat, lng], 16);
         }, () => {}, {timeout:8000, enableHighAccuracy:false});
       }
     }
 
+    // 起動時に設定を読み込んでから開発者設定を初期化する
     loadConfig().then(() => {
-      if(isDev) initDev();
+      initDev();
     });
+
     if(!isSecure){
       setGpsStatus("スマホで位置情報を使うには、HTTPSのサイトで開いてください", "wait");
     }
