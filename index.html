@@ -197,6 +197,15 @@
       border:0;
       box-shadow:none;
     }
+
+    /* パターンB: ヘディングアップ（回転コンテナ） */
+    .radar-rotate-container{
+      position:absolute;
+      inset:0;
+      transform-origin:50% 50%;
+      will-change:transform;
+    }
+
     .grid{position:absolute;inset:0; display:none;}
 
     .scan{
@@ -240,6 +249,7 @@
       border-radius:50%;
       background:radial-gradient(circle, rgba(255,75,63,.42) 0%, rgba(255,75,63,.18) 18%, rgba(255,75,63,0) 62%);
       filter:blur(2px);
+      z-index:4;
     }
     .center-dot{
       position:absolute;
@@ -253,6 +263,7 @@
       box-shadow:0 0 10px rgba(255,75,63,.9);
       animation:pulse 1.8s ease-in-out infinite;
       animation-play-state:paused;
+      z-index:5;
     }
     .screen.on .center-dot{animation-play-state:running;}
     @keyframes pulse{
@@ -271,6 +282,7 @@
       visibility:hidden;
       animation:none;
       transition:left .6s ease, top .6s ease, opacity .3s ease;
+      z-index:2;
     }
     .screen.balls .target-dot.show{
       visibility:visible;
@@ -440,20 +452,24 @@
       </div>
       <div class="screen-wrap">
         <div class="screen" id="screen">
-          <div class="scan"></div>
-          <div class="grid">
-            <div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div>
-            <div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div>
+          <!-- パターンB: この回転コンテナの中にスキャン、グリッド、ボールが入るため、自分が向いた方向に画面全体が回転する -->
+          <div class="radar-rotate-container" id="radarRotateContainer">
+            <div class="scan"></div>
+            <div class="grid">
+              <div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div>
+              <div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div><div class="h"></div>
+            </div>
+            <div class="target-dot t1" data-id="1"></div>
+            <div class="target-dot t2" data-id="2"></div>
+            <div class="target-dot t3" data-id="3"></div>
+            <div class="target-dot t4" data-id="4"></div>
+            <div class="target-dot t5" data-id="5"></div>
+            <div class="target-dot t6" data-id="6"></div>
+            <div class="target-dot t7" data-id="7"></div>
           </div>
+          <!-- 中央の現在地アイコンは回転せず常に上を向く -->
           <div class="center-glow"></div>
           <div class="center-dot"></div>
-          <div class="target-dot t1" data-id="1"></div>
-          <div class="target-dot t2" data-id="2"></div>
-          <div class="target-dot t3" data-id="3"></div>
-          <div class="target-dot t4" data-id="4"></div>
-          <div class="target-dot t5" data-id="5"></div>
-          <div class="target-dot t6" data-id="6"></div>
-          <div class="target-dot t7" data-id="7"></div>
         </div>
       </div>
     </div>
@@ -483,7 +499,7 @@
     <div class="dev-coords" id="devCoords"></div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></script>
   <script>
     const STORAGE_KEY = "dragonRadarConfig";
     const isDev = new URLSearchParams(location.search).get("dev") === "1";
@@ -506,6 +522,12 @@
     let watchId = null;
     let selectedBall = 1;
     let map, markers = {}, userMarker = null;
+
+    // 方位センサー管理用変数（省電力＆スムージング対応）
+    let currentHeading = 0;
+    let displayedHeading = 0;
+    let isOrienting = false;
+    let animFrameId = null;
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -650,9 +672,61 @@
       watchId = navigator.geolocation.watchPosition(
         (pos) => applyUserPosition(pos.coords.latitude, pos.coords.longitude),
         () => {},
-        {enableHighAccuracy:false, maximumAge:60000}
+        {enableHighAccuracy:true, timeout:30000, maximumAge:0}
       );
     }
+
+    // --- 方位センサー処理 (省電力スムージング & 描画ループ) ---
+    function handleOrientation(e){
+      let heading = null;
+      if(e.webkitCompassHeading !== undefined){
+        heading = e.webkitCompassHeading; // iOS
+      } else if(e.alpha !== null){
+        heading = 360 - e.alpha; // Android等
+      }
+      if(heading !== null){
+        currentHeading = heading;
+      }
+    }
+
+    function smoothRotateLoop(){
+      if(!isOrienting) return;
+      
+      // 角度の急激な変化や0/360度の境界を跨ぐときのガタつきを防ぐ補間処理
+      let diff = currentHeading - displayedHeading;
+      if(diff > 180) diff -= 360;
+      if(diff < -180) diff += 360;
+      displayedHeading += diff * 0.25; // 追従の滑らかさ係数
+      if(displayedHeading < 0) displayedHeading += 360;
+      if(displayedHeading >= 360) displayedHeading -= 360;
+
+      const rotContainer = document.getElementById("radarRotateContainer");
+      if(rotContainer){
+        // パターンB: 自分が向いている方向を真上にするため逆回転(-displayedHeading)させる
+        rotContainer.style.transform = `rotate(${-displayedHeading}deg)`;
+      }
+
+      animFrameId = requestAnimationFrame(smoothRotateLoop);
+    }
+
+    async function initOrientation(){
+      if(isOrienting) return;
+      // iOS 13+ のパーミッション要求対応
+      if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+        try{
+          const response = await DeviceOrientationEvent.requestPermission();
+          if(response !== 'granted') return;
+        }catch(e){
+          return;
+        }
+      }
+      isOrienting = true;
+      window.addEventListener('deviceorientation', handleOrientation, true);
+      if(!animFrameId){
+        smoothRotateLoop();
+      }
+    }
+    // ----------------------------------------------------
 
     function requestGps(){
       if(!navigator.geolocation){
@@ -664,10 +738,14 @@
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           applyUserPosition(pos.coords.latitude, pos.coords.longitude);
-          setGpsStatus("位置情報：許可されました", "ok");
+          setGpsStatus("位置情報・コンパス連動中", "ok");
           screen.classList.add("on");
           showBallsLater();
           startWatch();
+          
+          // GPS取得成功＆レーダー起動と同時に方位センサー（コンパス）を有効化
+          initOrientation();
+
           busy = false;
         },
         (err) => {
@@ -675,7 +753,7 @@
           screen.classList.remove("on");
           busy = false;
         },
-        {enableHighAccuracy: true, timeout: 30000, maximumAge: 0}
+        {enableHighAccuracy:true, timeout:30000, maximumAge:0}
       );
     }
 
@@ -777,7 +855,6 @@
       };
       document.getElementById("devClose").onclick = () => panel.classList.remove("open");
 
-      // 【追加】現在地を取得ボタンのクリック処理
       document.getElementById("gpsBtn").onclick = () => {
         if(!navigator.geolocation){
           alert("この端末では位置情報を使えません");
@@ -794,7 +871,7 @@
           (err) => {
             alert(geoErrorMessage(err));
           },
-          {timeout:15000, enableHighAccuracy:false}
+          {timeout:30000, enableHighAccuracy:true, maximumAge:0}
         );
       };
 
@@ -847,7 +924,7 @@
           const lng = pos.coords.longitude;
           applyUserPosition(lat, lng);
           map.setView([lat, lng], 16);
-        }, () => {}, {timeout:8000, enableHighAccuracy:false});
+        }, () => {}, {timeout:8000, enableHighAccuracy:true, maximumAge:0});
       }
     }
 
