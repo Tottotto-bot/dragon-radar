@@ -393,6 +393,7 @@
       cursor:pointer;
       font-weight:700;
     }
+    .btn-gps{background:#0fa355;color:#fff;}
     .btn-save{background:#ffe500;color:#000;}
     .btn-copy{background:#1aa3e8;color:#fff;}
     .btn-clear{background:#444;color:#fff;}
@@ -465,7 +466,7 @@
       <h2>BALL LOCATIONS</h2>
       <button class="dev-close" id="devClose" type="button">閉じる</button>
     </div>
-    <p class="dev-note">星の番号を選んでから地図をタップすると、そのドラゴンボールの場所になります。北がレーダーの上です。</p>
+    <p class="dev-note">星の番号を選んでから地図をタップすると、そのドラゴンボールの場所になります。「現在地を取得」を押すと自分の位置に地図が移動します。</p>
     <div class="dev-row" id="ballBtns"></div>
     <div id="devMap"></div>
     <div class="dev-row">
@@ -474,6 +475,7 @@
       </label>
     </div>
     <div class="dev-row dev-actions">
+      <button class="btn-gps" id="gpsBtn" type="button">現在地を取得</button>
       <button class="btn-save" id="saveBtn" type="button">この端末に保存</button>
       <button class="btn-copy" id="copyBtn" type="button">balls.jsonをコピー</button>
       <button class="btn-clear" id="clearBtn" type="button">位置を全削除</button>
@@ -503,7 +505,7 @@
     let ballsShown = false;
     let watchId = null;
     let selectedBall = 1;
-    let map, markers = {};
+    let map, markers = {}, userMarker = null;
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -530,7 +532,26 @@
     function applyUserPosition(lat, lng){
       userPos = {lat, lng};
       placeBallsOnRadar();
+      updateUserMarker(lat, lng);
     }
+
+    function updateUserMarker(lat, lng){
+      if(!map) return;
+      if(userMarker){
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        userMarker = L.marker([lat, lng], {
+          title: "現在地",
+          icon: L.divIcon({
+            className: 'user-pin',
+            html: '<div style="width:16px;height:16px;background:#1aa3e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.6);"></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        }).addTo(map).bindPopup("あなたの現在地");
+      }
+    }
+
     function placeBallsOnRadar(){
       if(!userPos) return;
       const range = Number(config.rangeMeters) || 500;
@@ -633,7 +654,6 @@
       );
     }
 
-    // 【修正箇所】GPSの取得成功をトリガーにして、初めてレーダーをONにして3秒後にボールを表示する
     function requestGps(){
       if(!navigator.geolocation){
         setGpsStatus("この端末では位置情報を使えません", "ng");
@@ -643,17 +663,10 @@
       setGpsStatus("位置情報の許可を確認しています…", "wait");
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          // 1. 現在地をセットして計算
           applyUserPosition(pos.coords.latitude, pos.coords.longitude);
           setGpsStatus("位置情報：許可されました", "ok");
-          
-          // 2. 取得成功した瞬間にレーダーの回転（スキャン）を開始
           screen.classList.add("on");
-          
-          // 3. そこから3秒後にドラゴンボールを表示するタイマーを開始
           showBallsLater();
-          
-          // 4. 以降の位置の追跡を開始
           startWatch();
           busy = false;
         },
@@ -670,13 +683,11 @@
       if(busy) return;
       busy = true;
       playPochitt();
-      
       if(!isSecure){
         setGpsStatus("HTTPSのページではないため、位置情報の許可画面を出せません", "ng");
         busy = false;
         return;
       }
-      // 即座に回さず、まずはGPSの現在地取得を確実に行う
       requestGps();
     }
 
@@ -741,11 +752,52 @@
       syncBallBtns();
       renderDevCoords();
 
+      map = L.map("devMap").setView([35.681236, 139.767125], 14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap"
+      }).addTo(map);
+
+      if(userPos){
+        map.setView([userPos.lat, userPos.lng], 16);
+        updateUserMarker(userPos.lat, userPos.lng);
+      }
+
+      config.balls.forEach(upsertMarker);
+
       document.getElementById("devOpen").onclick = () => {
         panel.classList.add("open");
-        setTimeout(() => { map.invalidateSize(); }, 200);
+        setTimeout(() => { 
+          map.invalidateSize(); 
+          if(userPos){
+            map.setView([userPos.lat, userPos.lng], 16);
+            updateUserMarker(userPos.lat, userPos.lng);
+          }
+        }, 200);
       };
       document.getElementById("devClose").onclick = () => panel.classList.remove("open");
+
+      // 【追加】現在地を取得ボタンのクリック処理
+      document.getElementById("gpsBtn").onclick = () => {
+        if(!navigator.geolocation){
+          alert("この端末では位置情報を使えません");
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            applyUserPosition(lat, lng);
+            map.setView([lat, lng], 16);
+            alert("現在地を取得しました。");
+          },
+          (err) => {
+            alert(geoErrorMessage(err));
+          },
+          {timeout:15000, enableHighAccuracy:false}
+        );
+      };
+
       rangeInput.onchange = () => {
         config.rangeMeters = Number(rangeInput.value) || 500;
         placeBallsOnRadar();
@@ -754,14 +806,14 @@
         config.rangeMeters = Number(rangeInput.value) || 500;
         localStorage.setItem(STORAGE_KEY, configJSON());
         placeBallsOnRadar();
-        alert("この端末に保存しました。全員に反映するには balls.json をNetlifyへ上げてください。");
+        alert("この端末に保存しました。");
       };
       document.getElementById("copyBtn").onclick = async () => {
         config.rangeMeters = Number(rangeInput.value) || 500;
         const text = configJSON();
         try{
           await navigator.clipboard.writeText(text);
-          alert("balls.json の内容をコピーしました。Netlifyのサイトに balls.json として置いてください。");
+          alert("balls.json の内容をコピーしました。");
         }catch(e){
           prompt("コピーして balls.json にしてください", text);
         }
@@ -778,12 +830,6 @@
         placeBallsOnRadar();
       };
 
-      map = L.map("devMap").setView([35.681236, 139.767125], 14);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap"
-      }).addTo(map);
-      config.balls.forEach(upsertMarker);
       map.on("click", (e) => {
         const ball = config.balls.find(b => b.id === selectedBall);
         if(!ball) return;
@@ -794,10 +840,14 @@
         renderDevCoords();
         placeBallsOnRadar();
       });
-      if(navigator.geolocation){
+
+      if(navigator.geolocation && !userPos){
         navigator.geolocation.getCurrentPosition(pos => {
-          map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-        }, () => {}, {timeout:8000});
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          applyUserPosition(lat, lng);
+          map.setView([lat, lng], 16);
+        }, () => {}, {timeout:8000, enableHighAccuracy:false});
       }
     }
 
