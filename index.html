@@ -269,7 +269,11 @@
     }
     .screen.balls .target-dot.show{
       visibility:visible;
-      animation:blink 2.2s infinite steps(2,end);
+      animation:blink 3.4s infinite steps(2,end);
+    }
+    /* 中心にかぶっている場合の速い点滅 */
+    .screen.balls .target-dot.show.fast-blink{
+      animation:blink 1.0s infinite steps(2,end); /* 中心付近は速く点滅 */
     }
     @keyframes blink{
       0%,100%{opacity:1; transform:scale(1)}
@@ -562,6 +566,15 @@
         const top = 53 - Math.cos(brng) * r;
         dot.style.left = left + "%";
         dot.style.top = top + "%";
+        
+        // 中心（50%, 53%）からの距離を計算し、半分以上かぶっている場合は速い点滅クラスを付与
+        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
+        if(centerDist < 3.8){
+          dot.classList.add("fast-blink");
+        } else {
+          dot.classList.remove("fast-blink");
+        }
+        
         if(ballsShown) dot.classList.add("show");
       });
     }
