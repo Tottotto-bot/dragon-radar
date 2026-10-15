@@ -122,7 +122,6 @@
         0 2px 0 rgba(0,0,0,.5);
     }
 
-    /* レーダー本体（画像を使用）の設定に一本化 */
     .radar-shell{
       width:min(92vw, 460px, calc(100dvh - 268px));
       aspect-ratio:992 / 1149;
@@ -176,11 +175,11 @@
 
     .screen-wrap{
       position: absolute;
-      left: 13.5%;   /* モニターの中心に合うように横位置を調整 */
-      top: 21.5%;    /* モニターの中心に合うように縦位置を調整 */
-      width: 73%;    /* モニターの緑色の部分に収まるようサイズを縮小 */
-      aspect-ratio: 1 / 1; /* 縦横比を1:1の正円にする */
-      height: auto;  /* aspect-ratioを有効にするため自動計算にする */
+      left: 13.5%;
+      top: 21.5%;
+      width: 73%;
+      aspect-ratio: 1 / 1;
+      height: auto;
       padding: 0;
       border-radius: 50%;
       background: transparent;
@@ -630,9 +629,11 @@
       watchId = navigator.geolocation.watchPosition(
         (pos) => applyUserPosition(pos.coords.latitude, pos.coords.longitude),
         () => {},
-        {enableHighAccuracy:true, maximumAge:1000}
+        {enableHighAccuracy:false, maximumAge:60000}
       );
     }
+
+    // 【修正箇所】GPSの取得成功をトリガーにして、初めてレーダーをONにして3秒後にボールを表示する
     function requestGps(){
       if(!navigator.geolocation){
         setGpsStatus("この端末では位置情報を使えません", "ng");
@@ -642,31 +643,43 @@
       setGpsStatus("位置情報の許可を確認しています…", "wait");
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          // 1. 現在地をセットして計算
           applyUserPosition(pos.coords.latitude, pos.coords.longitude);
           setGpsStatus("位置情報：許可されました", "ok");
+          
+          // 2. 取得成功した瞬間にレーダーの回転（スキャン）を開始
+          screen.classList.add("on");
+          
+          // 3. そこから3秒後にドラゴンボールを表示するタイマーを開始
+          showBallsLater();
+          
+          // 4. 以降の位置の追跡を開始
           startWatch();
           busy = false;
         },
         (err) => {
           setGpsStatus(geoErrorMessage(err), "ng");
+          screen.classList.remove("on");
           busy = false;
         },
         {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
       );
     }
+
     function scanGps(){
       if(busy) return;
       busy = true;
       playPochitt();
-      screen.classList.add("on");
-      showBallsLater();
+      
       if(!isSecure){
         setGpsStatus("HTTPSのページではないため、位置情報の許可画面を出せません", "ng");
         busy = false;
         return;
       }
+      // 即座に回さず、まずはGPSの現在地取得を確実に行う
       requestGps();
     }
+
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
     function pressOff(){ btn.classList.remove("pressed"); document.querySelector(".radar-shell").classList.remove("knob-pressed"); }
     btn.addEventListener("pointerdown", (e) => { e.preventDefault(); pressOn(); });
