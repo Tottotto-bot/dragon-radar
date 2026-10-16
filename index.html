@@ -416,6 +416,72 @@
       color:#9f9;
     }
 
+    /* ★追加：大きめのQRコード起動ボタンのデザイン */
+    .qr-scan-btn {
+      display: none;
+      margin-top: 12px;
+      width: min(92vw, 400px);
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #0fa355, #12ba62);
+      color: #fff;
+      font-family: "Noto Sans JP", sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      border: 2px solid #ffe500;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(15, 163, 85, 0.4);
+      cursor: pointer;
+      touch-action: manipulation;
+      z-index: 15;
+    }
+    .qr-scan-btn.show {
+      display: block;
+    }
+
+    /* ★追加：カメラプレビュー・モーダルのスタイル */
+    .qr-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.95);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      font-family: "Noto Sans JP", sans-serif;
+    }
+    .qr-modal.open {
+      display: flex;
+    }
+    .qr-video-wrap {
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 1 / 1;
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #ffe500;
+      background: #111;
+    }
+    .qr-video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .qr-close-btn {
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: #ff4b3f;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
     @media (max-height:700px){
       .logo{margin-bottom:2px;}
       .logo-ja{margin-top:2px;}
@@ -462,6 +528,8 @@
       </div>
     </div>
     <div class="gps-status" id="gpsStatus"></div>
+    <!-- ★追加：QRコード読み取りボタン -->
+    <button class="qr-scan-btn" id="qrScanBtn" type="button">QRコードを読み取る</button>
   </div>
 
   <button class="dev-open" id="devOpen" type="button">開発者設定</button>
@@ -487,6 +555,15 @@
     <div class="dev-coords" id="devCoords"></div>
   </div>
 
+  <!-- ★追加：カメラ映像を表示するモーダル -->
+  <div class="qr-modal" id="qrModal">
+    <div class="qr-video-wrap">
+      <video id="qrVideo" autoplay playsinline muted></video>
+    </div>
+    <p style="color:#ffe500; font-size:13px; margin-top:12px; text-align:center;">QRコードをカメラにかざしてください</p>
+    <button class="qr-close-btn" id="qrCloseBtn" type="button">閉じる</button>
+  </div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "dragonRadarConfig";
@@ -495,6 +572,13 @@
     const screen = document.getElementById("screen");
     const gpsStatus = document.getElementById("gpsStatus");
     const dots = [...document.querySelectorAll(".target-dot")];
+
+    // ★追加：QRコード関連の要素
+    let mediaStream = null;
+    const qrScanBtn = document.getElementById("qrScanBtn");
+    const qrModal = document.getElementById("qrModal");
+    const qrVideo = document.getElementById("qrVideo");
+    const qrCloseBtn = document.getElementById("qrCloseBtn");
 
     const defaultConfig = () => ({
       rangeMeters: 500,
@@ -541,7 +625,7 @@
     }
 
     let gpsInitialized = false;
-    let orientationPermissionGranted = false; // ★追加：方位センサーの許可状態を保持するフラグ
+    let orientationPermissionGranted = false; // 方位センサーの許可状態を保持するフラグ
     let headingOffset = 0;
     let latestAlpha = null; // 直近の方位データ
 
@@ -650,6 +734,7 @@
       });
 
       if (overlappingCount > 0) {
+        qrScanBtn.classList.add("show"); // 重なっている間だけボタンを表示
         if (!beepTimer) {
           playRadarBeep();
           beepTimer = setInterval(() => {
@@ -657,6 +742,7 @@
           }, 1000);
         }
       } else {
+        qrScanBtn.classList.remove("show"); // 離れたらボタンを隠す
         if (beepTimer) {
           clearInterval(beepTimer);
           beepTimer = null;
@@ -782,7 +868,6 @@
       setGpsStatus("方位をスキャンしています…", "wait");
 
       const executeScan = () => {
-        // 毎回確実に最新のイベントを1回キャッチするためのリスナーを一時登録
         const tempListener = (event) => {
           if(event.alpha != null){
             latestAlpha = event.alpha;
@@ -795,7 +880,6 @@
 
         window.addEventListener('deviceorientation', tempListener);
 
-        // 万が一イベントが来ない場合でも、すでに保持しているデータがあればそれを即座に適用するフォールバック
         setTimeout(() => {
           window.removeEventListener('deviceorientation', tempListener);
           if(latestAlpha != null){
@@ -808,24 +892,22 @@
         }, 400);
       };
 
-      // ★追加・修正：すでに許可済み、またはiOS以外の環境の場合は、重いパーミッション要求をスキップして直接実行する
       if (orientationPermissionGranted || typeof DeviceOrientationEvent === 'undefined' || typeof DeviceOrientationEvent.requestPermission !== 'function') {
         executeScan();
         return;
       }
 
-      // 初回のみiOSのパーミッション確認を行う
       DeviceOrientationEvent.requestPermission()
         .then(response => {
           if (response === 'granted') {
-            orientationPermissionGranted = true; // 許可されたらフラグを立てる
+            orientationPermissionGranted = true;
             executeScan();
           } else {
             setGpsStatus("方位センサーの許可が拒否されました", "ng");
           }
         })
         .catch(() => {
-          executeScan(); // 失敗時もフォールバック実行
+          executeScan();
         });
     }
 
@@ -866,11 +948,55 @@
           {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
         );
       } else {
-        // 2回目以降：何回押してもその瞬間に必ず最新方位をスキャンする
         scanHeading();
         busy = false;
       }
     }
+
+    // ★追加：カメラ起動・停止処理（例外処理・安全対策済み）
+    async function startCamera(){
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("このブラウザまたは端末ではカメラ機能がサポートされていません。");
+        return;
+      }
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" } // 背面カメラ優先
+        });
+        qrVideo.srcObject = mediaStream;
+        qrModal.classList.add("open");
+      } catch (err) {
+        console.error("Camera error:", err);
+        let errorMsg = "カメラを起動できませんでした。";
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          errorMsg = "カメラのアクセス権限が拒否されています。ブラウザの設定から許可してください。";
+        } else if (err.name === "NotFoundError") {
+          errorMsg = "利用可能なカメラが見つかりませんでした。";
+        }
+        alert(errorMsg);
+      }
+    }
+
+    function stopCamera(){
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      qrVideo.srcObject = null;
+      qrModal.classList.remove("open");
+    }
+
+    // ★追加：QRボタン・閉じるボタンのイベント設定
+    qrScanBtn.addEventListener("click", () => {
+      unlockAudioContext();
+      playPochitt();
+      startCamera();
+    });
+
+    qrCloseBtn.addEventListener("click", () => {
+      stopCamera();
+    });
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
     function pressOff(){ btn.classList.remove("pressed"); document.querySelector(".radar-shell").classList.remove("knob-pressed"); }
@@ -1043,4 +1169,4 @@
     }
   </script>
 </body>
-</html>  
+</html>
