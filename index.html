@@ -452,8 +452,8 @@
       height: 100dvh;
       overflow: hidden;
       z-index: 10000;
-      /* AR.js の video 要素は body 直下に作られるため、モーダル背景は透明にする */
-      background: transparent;
+      /* カメラ映像もこのモーダル内へ移動させ、映像とAR描画を同じ重なり順で管理 */
+      background: #000;
       isolation: isolate;
     }
     .ar-modal.open { display: block; }
@@ -484,17 +484,17 @@
       z-index: 2 !important;
       pointer-events: none !important;
     }
-    /* AR.js が生成する実カメラ映像 */
-    .arjs-video {
-      position: fixed !important;
+    /* AR.js の映像は #arModal 内へ移し、ARキャンバスより下に置く */
+    .ar-modal .arjs-video {
+      position: absolute !important;
       inset: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      height: 100dvh !important;
+      display: block !important;
+      width: 100% !important;
+      height: 100% !important;
       object-fit: cover !important;
-      /* body 直下の映像を透明なモーダル越しに表示し、ARキャンバスをその上に重ねる */
-      z-index: 9999 !important;
+      z-index: 0 !important;
       background: #000;
+      pointer-events: none !important;
     }
     .ar-status {
       position: fixed;
@@ -629,6 +629,7 @@
     let arCameraReady = false;
     let arCameraInitHandler = null;
     let arCameraErrorHandler = null;
+    let arVideoObserver = null;
 
     const defaultConfig = () => ({
       rangeMeters: 500,
@@ -1005,7 +1006,24 @@
       arStatus.style.display = "block";
     }
 
+    // AR.js はカメラ video を document.body 直下に追加することがある。
+    // そのままだとモーダルの stacking context の裏側に隠れるため、モーダル内へ移動する。
+    function adoptARVideo() {
+      document.querySelectorAll("video.arjs-video").forEach((video) => {
+        if (video.parentElement !== arModal) {
+          arModal.insertBefore(video, arContainer);
+        }
+        video.setAttribute("playsinline", "");
+        video.setAttribute("autoplay", "");
+        video.muted = true;
+      });
+    }
+
     function cleanupAR() {
+      if (arVideoObserver) {
+        arVideoObserver.disconnect();
+        arVideoObserver = null;
+      }
       if (arStartTimeout) {
         clearTimeout(arStartTimeout);
         arStartTimeout = null;
@@ -1063,6 +1081,7 @@
       setARStatus("カメラの許可を確認しています…");
       // AR.js のイベント監視を先に登録し、初期化直後のイベント取りこぼしを防ぐ。
       arCameraInitHandler = () => {
+        adoptARVideo();
         arCameraReady = true;
         setARStatus("カメラ起動済みです。白黒のHiroマーカーを画面に映してください。");
         if (arStartTimeout) {
@@ -1075,6 +1094,10 @@
       };
       window.addEventListener("camera-init", arCameraInitHandler);
       window.addEventListener("camera-error", arCameraErrorHandler);
+
+      // video 要素が遅れて追加される端末にも対応する。
+      arVideoObserver = new MutationObserver(() => adoptARVideo());
+      arVideoObserver.observe(document.body, { childList: true, subtree: true });
 
       arContainer.innerHTML = `
         <a-scene
@@ -1094,6 +1117,11 @@
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>`;
+
+      // AR.js が video を作るタイミングに備え、初期化直後にも確認する。
+      requestAnimationFrame(() => adoptARVideo());
+      setTimeout(adoptARVideo, 300);
+      setTimeout(adoptARVideo, 1000);
 
       arStartTimeout = setTimeout(() => {
         if (!arCameraReady) {
