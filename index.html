@@ -255,6 +255,7 @@
       50%{transform:translate(-50%,-50%) scale(1.08); opacity:.88}
     }
 
+    /* ドット自体の基本スタイルにはアニメーションを入れず、表示状態のときに共通の親からアニメーションを適用 */
     .target-dot{
       position:absolute;
       width:14px;
@@ -264,18 +265,18 @@
       box-shadow:0 0 10px rgba(255,230,91,.9);
       opacity:0;
       visibility:hidden;
-      animation:none;
       transition:left .6s ease, top .6s ease, opacity .3s ease;
     }
+    
+    /* screen.balls がついた瞬間、中のすべてのドットが一斉に同じタイミングで点滅を開始する */
     .screen.balls .target-dot.show{
       visibility:visible;
       animation:blink 3.4s infinite steps(2,end);
-      animation-delay: 0s; /* すべてのボールの開始タイミングを強制的に同期 */
+      /* ここでanimation-startを共有させるため、個別の遅延を入れない */
     }
-    /* 中心にかぶっている場合の速い点滅 */
+    
     .screen.balls .target-dot.show.fast-blink{
-      animation:blink 1.0s infinite steps(2,end); /* 中心付近は速く点滅 */
-      animation-delay: 0s; /* 速い点滅もタイミングを同期 */
+      animation:blink 1.0s infinite steps(2,end);
     }
     @keyframes blink{
       0%,100%{opacity:1; transform:scale(1)}
