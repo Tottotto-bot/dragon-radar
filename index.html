@@ -172,7 +172,7 @@
     .screen-wrap{
       position: absolute;
       left: 13.5%;
-      top: 21.5%;
+      top: 23.4%;
       width: 73%;
       aspect-ratio: 1 / 1;
       height: auto;
@@ -228,8 +228,8 @@
     .center-glow{
       position:absolute;
       left:50%;
-      top:53%;
-      transform:translate(-50%,-40%);
+      top:50%;
+      transform:translate(-50%,-50%);
       width:78px;
       height:78px;
       border-radius:50%;
@@ -239,8 +239,8 @@
     .center-dot{
       position:absolute;
       left:50%;
-      top:53%;
-      transform:translate(-50%,-40%);
+      top:50%;
+      transform:translate(-50%,-50%);
       width:20px;
       height:18px;
       background:var(--red);
@@ -260,6 +260,8 @@
       position:absolute;
       width:14px;
       height:14px;
+      margin-left:-7px;
+      margin-top:-7px;
       border-radius:50%;
       background:var(--yellow);
       box-shadow:0 0 10px rgba(255,230,91,.9);
@@ -626,12 +628,12 @@
 
         const r = (dist / range) * 42;
         const left = 50 + Math.sin(brngRad) * r;
-        const top = 53 - Math.cos(brngRad) * r;
+        const top = 50 - Math.cos(brngRad) * r;
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
         // 画面上の中心からの距離を計算
-        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
+        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 50) ** 2);
         
         // 2. 「一番近いボール」であり、かつ中心の三角に「半分ほど被った（距離が5.2以内に入った）」場合のみ高速点滅にする
         if(i === closestBallIndex && centerDist < 5.2){
