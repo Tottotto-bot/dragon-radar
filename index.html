@@ -255,7 +255,16 @@
       50%{transform:translate(-50%,-50%) scale(1.08); opacity:.88}
     }
 
-    /* ドット自体の基本スタイルにはアニメーションを入れず、表示状態のときに共通の親からアニメーションを適用 */
+    /* --- 修正：すべてのドットが共通の親からアニメーションのタイミング（位相）を強制同期する設定 --- */
+    @keyframes blink{
+      0%,100%{opacity:1; transform:scale(1)}
+      50%{opacity:.22; transform:scale(.86)}
+    }
+    @keyframes fastBlink{
+      0%,100%{opacity:1; transform:scale(1)}
+      50%{opacity:.22; transform:scale(.86)}
+    }
+
     .target-dot{
       position:absolute;
       width:14px;
@@ -265,23 +274,19 @@
       box-shadow:0 0 10px rgba(255,230,91,.9);
       opacity:0;
       visibility:hidden;
-      transition:left .6s ease, top .6s ease, opacity .3s ease;
+      transition:left .6s ease, top .6s ease;
     }
     
-    /* screen.balls がついた瞬間、中のすべてのドットが一斉に同じタイミングで点滅を開始する */
+    /* 画面に表示された瞬間から、レーダー画面全体（screen.balls）と完全に同期したタイマーで点滅 */
     .screen.balls .target-dot.show{
       visibility:visible;
       animation:blink 3.4s infinite steps(2,end);
-      /* ここでanimation-startを共有させるため、個別の遅延を入れない */
     }
     
     .screen.balls .target-dot.show.fast-blink{
-      animation:blink 1.0s infinite steps(2,end);
+      animation:fastBlink 1.0s infinite steps(2,end);
     }
-    @keyframes blink{
-      0%,100%{opacity:1; transform:scale(1)}
-      50%{opacity:.22; transform:scale(.86)}
-    }
+    /* -------------------------------------------------------------------------------- */
 
     .gps-status{
       margin-top:18px;
@@ -300,7 +305,6 @@
     .gps-status.ng{color:#ff8b82;}
     .gps-status.wait{color:#ffe65b;}
 
-    /* 常に開発者設定ボタンを表示するように修正 */
     .dev-open{
       display:block;
       position:fixed;
@@ -412,7 +416,7 @@
     @media (max-height:700px){
       .logo{margin-bottom:2px;}
       .logo-ja{margin-top:2px;}
-      .radar-shell{margin-top:14;width:min(98vw, 560px, calc(100dvh - 100px));} /* ← ここを変更します */
+      .radar-shell{margin-top:14px;width:min(98vw, 560px, calc(100dvh - 100px));}
       .gps-status{margin-top:2px;}
     }
   </style>
@@ -502,9 +506,8 @@
     let watchId = null;
     let selectedBall = 1;
     let map = null, markers = {}, userMarker = null;
-    let beepTimer = null; // 接近音のタイマー管理用
+    let beepTimer = null;
 
-    // 方位管理用の変数
     let gpsInitialized = false;
     let headingOffset = 0;
 
@@ -556,7 +559,7 @@
     function placeBallsOnRadar(){
       if(!userPos) return;
       const range = Number(config.rangeMeters) || 500;
-      let overlappingCount = 0; // 半分以上かぶっているボールの数をカウント
+      let overlappingCount = 0;
 
       config.balls.forEach((ball, i) => {
         const dot = dots[i];
@@ -570,7 +573,6 @@
           dot.classList.remove("show", "fast-blink");
           return;
         }
-        // 方位オフセット（headingOffset）を角度に反映する
         const rawBrng = bearingDeg(userPos.lat, userPos.lng, ball.lat, ball.lng);
         const adjustedBrng = (rawBrng - headingOffset + 360) % 360;
         const brngRad = toRad(adjustedBrng);
@@ -581,11 +583,10 @@
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
-        // 中心（50%, 53%）からの距離を計算し、半分以上かぶっている場合は速い点滅クラスを付与
         const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
         if(centerDist < 3.8){
           dot.classList.add("fast-blink");
-          overlappingCount++; // かぶっているボールを発見
+          overlappingCount++;
         } else {
           dot.classList.remove("fast-blink");
         }
@@ -593,17 +594,14 @@
         if(ballsShown) dot.classList.add("show");
       });
 
-      // --- 音の自動再生・停止の制御 ---
       if (overlappingCount > 0) {
-        // 半分以上かぶっているボールがある場合
         if (!beepTimer) {
-          playRadarBeep(); // すぐに1回鳴らす
+          playRadarBeep();
           beepTimer = setInterval(() => {
-            playRadarBeep(); // 1秒ごとに鳴らす
+            playRadarBeep();
           }, 1000);
         }
       } else {
-        // すべて離れた（半分以下になった）場合
         if (beepTimer) {
           clearInterval(beepTimer);
           beepTimer = null;
@@ -638,11 +636,9 @@
       return audioCtx;
     }
     
-    // 【追加・対策】最初にボタンを押したタイミングでAudioContextを完全に目覚めさせる処理
     function unlockAudioContext() {
       const ctx = ensureAudio();
       if(!ctx) return;
-      // ごく短い無音の音を強制的に鳴らしてブラウザの制限を完全にクリアする
       try {
         const buffer = ctx.createBuffer(1, 1, 22050);
         const source = ctx.createBufferSource();
@@ -652,7 +648,6 @@
       } catch(e) {}
     }
 
-    // ボタンを押したときの音
     function playPochitt(){
       const ctx = ensureAudio();
       if(!ctx) return;
@@ -680,7 +675,6 @@
       thud.stop(t + 0.12);
     }
 
-    // 1秒に1回鳴る「ピッ」という接近音
     function playRadarBeep() {
       const ctx = ensureAudio();
       if (!ctx) return;
@@ -690,7 +684,7 @@
       const gain = ctx.createGain();
       
       osc.type = "square";
-      osc.frequency.setValueAtTime(2200, t); // 高めの「ピッ」
+      osc.frequency.setValueAtTime(2200, t);
       
       gain.gain.setValueAtTime(0.15, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
@@ -726,16 +720,15 @@
         {enableHighAccuracy:false, maximumAge:60000}
       );
     }
-    // 方位スキャン機能（2回目以降のボタン押下時）
     function scanHeading(){
       setGpsStatus("方位をスキャンしています…", "wait");
 
-      // iOS 13以降のパーミッション要求が必要な場合の処理
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
-              window.addEventListener('deviceorientation', handleOrientation, { once: true });
+              window.removeEventListener('deviceorientation', handleOrientation);
+              window.addEventListener('deviceorientation', handleOrientation);
             } else {
               setGpsStatus("方位センサーの許可が拒否されました", "ng");
             }
@@ -744,8 +737,8 @@
             setGpsStatus("方位の取得に失敗しました", "ng");
           });
       } else {
-        // Androidや許可不要のブラウザ
-        window.addEventListener('deviceorientation', handleOrientation, { once: true });
+        window.removeEventListener('deviceorientation', handleOrientation);
+        window.addEventListener('deviceorientation', handleOrientation);
         
         setTimeout(() => {
           if (headingOffset === 0) {
@@ -761,17 +754,16 @@
         headingOffset = alpha;
         placeBallsOnRadar();
         setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+        window.removeEventListener('deviceorientation', handleOrientation);
       } else {
         setGpsStatus("方位データを取得できませんでした", "ng");
       }
     }
 
-    // 1回目：GPS取得＆表示、2回目以降：方位スキャンに切り替えるメイン関数
     function handleScanButton(){
       if(busy) return;
       busy = true;
 
-      // 【追加】ボタンが押された瞬間にオーディオのロックを確実に解除する
       unlockAudioContext();
       playPochitt();
 
@@ -794,7 +786,7 @@
             screen.classList.add("on");
             showBallsLater();
             startWatch();
-            gpsInitialized = true; // 次回から方位スキャンに切り替え
+            gpsInitialized = true;
             busy = false;
           },
           (err) => {
@@ -813,7 +805,6 @@
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
     function pressOff(){ btn.classList.remove("pressed"); document.querySelector(".radar-shell").classList.remove("knob-pressed"); }
     
-    // ボタンのイベントを handleScanButton に紐付け
     btn.addEventListener("pointerdown", (e) => { e.preventDefault(); pressOn(); });
     btn.addEventListener("pointerup", () => { pressOff(); handleScanButton(); });
     btn.addEventListener("pointercancel", pressOff);
@@ -873,7 +864,6 @@
       syncBallBtns();
       renderDevCoords();
 
-      // Leafletマップの初期化
       map = L.map("devMap").setView([35.681236, 139.767125], 14);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
@@ -887,7 +877,6 @@
 
       config.balls.forEach(upsertMarker);
 
-      // 開閉ボタンのイベント
       document.getElementById("devOpen").onclick = () => {
         panel.classList.add("open");
         setTimeout(() => { 
@@ -902,7 +891,6 @@
       };
       document.getElementById("devClose").onclick = () => panel.classList.remove("open");
 
-      // 現在地を取得ボタン
       document.getElementById("gpsBtn").onclick = () => {
         if(!navigator.geolocation){
           alert("この端末では位置情報を使えません");
@@ -940,7 +928,7 @@
           await navigator.clipboard.writeText(text);
           alert("balls.json の内容をコピーしました。");
         }catch(e){
-          prompt("コピーして balls.json にしてください", text);
+          prompt("balls.json の内容", text);
         }
       };
       document.getElementById("clearBtn").onclick = () => {
@@ -976,7 +964,6 @@
       }
     }
 
-    // 起動時に設定を読み込んでから開発者設定を初期化する
     loadConfig().then(() => {
       initDev();
     });
