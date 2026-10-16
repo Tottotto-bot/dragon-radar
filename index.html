@@ -255,16 +255,7 @@
       50%{transform:translate(-50%,-50%) scale(1.08); opacity:.88}
     }
 
-    /* --- 修正：すべてのドットが共通の親からアニメーションのタイミング（位相）を強制同期する設定 --- */
-    @keyframes blink{
-      0%,100%{opacity:1; transform:scale(1)}
-      50%{opacity:.22; transform:scale(.86)}
-    }
-    @keyframes fastBlink{
-      0%,100%{opacity:1; transform:scale(1)}
-      50%{opacity:.22; transform:scale(.86)}
-    }
-
+    /* --- ドラゴンボール点滅：JSで同期制御するため、CSSアニメーションは使わない --- */
     .target-dot{
       position:absolute;
       width:14px;
@@ -277,16 +268,26 @@
       transition:left .6s ease, top .6s ease;
     }
     
-    /* 画面に表示された瞬間から、レーダー画面全体（screen.balls）と完全に同期したタイマーで点滅 */
+    /* showクラスで表示。点滅のON/OFFはJSがblink-offクラスで制御 */
     .screen.balls .target-dot.show{
       visibility:visible;
-      animation:blink 3.4s infinite steps(2,end);
+      opacity:1;
+      transform:scale(1);
     }
-    
+    .screen.balls .target-dot.show.blink-off{
+      opacity:.22;
+      transform:scale(.86);
+    }
+    /* fast-blinkドットも同様（JSが別タイマーで制御） */
     .screen.balls .target-dot.show.fast-blink{
-      animation:fastBlink 1.0s infinite steps(2,end);
+      opacity:1;
+      transform:scale(1);
     }
-    /* -------------------------------------------------------------------------------- */
+    .screen.balls .target-dot.show.fast-blink.blink-off{
+      opacity:.22;
+      transform:scale(.86);
+    }
+    /* -------------------------------------------------------------------- */
 
     .gps-status{
       margin-top:18px;
@@ -507,6 +508,37 @@
     let selectedBall = 1;
     let map = null, markers = {}, userMarker = null;
     let beepTimer = null;
+    /* --- 同期点滅タイマー --- */
+    let normalBlinkTimer = null;
+    let fastBlinkTimer = null;
+    let normalBlinkState = true;  // true=表示, false=消灯
+    let fastBlinkState = true;
+
+    function startBlinkTimers(){
+      // 通常点滅：3.4秒周期（1.7秒ON、1.7秒OFF）
+      if(!normalBlinkTimer){
+        normalBlinkTimer = setInterval(() => {
+          normalBlinkState = !normalBlinkState;
+          dots.forEach(dot => {
+            // fast-blinkドットは別タイマーで制御するのでスキップ
+            if(dot.classList.contains("fast-blink")) return;
+            if(!dot.classList.contains("show")) return;
+            dot.classList.toggle("blink-off", !normalBlinkState);
+          });
+        }, 1700);
+      }
+      // 高速点滅：1.0秒周期（0.5秒ON、0.5秒OFF）
+      if(!fastBlinkTimer){
+        fastBlinkTimer = setInterval(() => {
+          fastBlinkState = !fastBlinkState;
+          dots.forEach(dot => {
+            if(!dot.classList.contains("fast-blink")) return;
+            if(!dot.classList.contains("show")) return;
+            dot.classList.toggle("blink-off", !fastBlinkState);
+          });
+        }, 500);
+      }
+    }
 
     let gpsInitialized = false;
     let headingOffset = 0;
@@ -565,12 +597,12 @@
         const dot = dots[i];
         if(!dot) return;
         if(ball.lat == null || ball.lng == null){
-          dot.classList.remove("show", "fast-blink");
+          dot.classList.remove("show", "fast-blink", "blink-off");
           return;
         }
         const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
         if(dist > range){
-          dot.classList.remove("show", "fast-blink");
+          dot.classList.remove("show", "fast-blink", "blink-off");
           return;
         }
         const rawBrng = bearingDeg(userPos.lat, userPos.lng, ball.lat, ball.lng);
@@ -586,9 +618,13 @@
         const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
         if(centerDist < 3.8){
           dot.classList.add("fast-blink");
+          // fast-blinkドットは高速タイマーの現在状態に即座に同期
+          dot.classList.toggle("blink-off", !fastBlinkState);
           overlappingCount++;
         } else {
           dot.classList.remove("fast-blink");
+          // 通常点滅タイマーの現在状態に即座に同期
+          dot.classList.toggle("blink-off", !normalBlinkState);
         }
         
         if(ballsShown) dot.classList.add("show");
@@ -702,6 +738,7 @@
         ballsShown = true;
         screen.classList.add("balls");
         placeBallsOnRadar();
+        startBlinkTimers();
         ballsTimer = null;
       }, 3000);
     }
