@@ -590,6 +590,22 @@
     function placeBallsOnRadar(){
       if(!userPos) return;
       const range = Number(config.rangeMeters) || 500;
+      
+      // 1. 範囲内にあるボールの中で、GPS実距離が最も近いものを1つだけ特定する
+      let closestBallIndex = -1;
+      let minDst = Infinity;
+
+      config.balls.forEach((ball, i) => {
+        if(ball.lat == null || ball.lng == null) return;
+        const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
+        if(dist <= range){
+          if(dist < minDst){
+            minDst = dist;
+            closestBallIndex = i;
+          }
+        }
+      });
+
       let overlappingCount = 0;
 
       config.balls.forEach((ball, i) => {
@@ -614,8 +630,8 @@
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
-        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
-        if(centerDist < 3.8){
+        // 2. 「一番近いボール」に選ばれたものだけを高速点滅（fast-blink）にする
+        if(i === closestBallIndex){
           dot.classList.add("fast-blink");
           dot.classList.toggle("blink-off", !fastBlinkState);
           overlappingCount++;
