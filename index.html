@@ -1060,7 +1060,7 @@
       arStarting = false;
     }
 
-    function startAR() {
+    async function startAR() {
       if (arStarting) return;
       arStarting = true;
       arCameraReady = false;
@@ -1075,10 +1075,36 @@
         return;
       }
 
-      // 先にモーダルを表示してからシーンを作成し、初期化時のサイズ計算を安定させる。
+      // ボタン操作の直後にカメラ権限を明示的に確認する。
+      // 拒否済み・OS側でブロックされている場合は、黒画面のまま待たせず原因を表示する。
       appMain.classList.add("hidden");
       arModal.classList.add("open");
       setARStatus("カメラの許可を確認しています…");
+      let permissionTestStream = null;
+      try {
+        permissionTestStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+      } catch (error) {
+        const name = error && error.name ? error.name : "";
+        let message = "カメラを利用できません。スマホの設定で、このサイトのカメラ使用を許可してから再読み込みしてください。";
+        if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+          message = "カメラの許可が拒否されているか、ブロックされています。Chromeのサイト設定で「カメラ」を「許可」に変更し、ページを再読み込みしてください。";
+        } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+          message = "利用できるカメラが見つかりません。スマホのカメラが使用できるか確認してください。";
+        } else if (name === "NotReadableError" || name === "TrackStartError") {
+          message = "カメラを起動できません。他のアプリがカメラを使用していないか確認し、閉じてから再試行してください。";
+        }
+        setARStatus(message, true);
+        arStarting = false;
+        return;
+      } finally {
+        // 権限確認用のストリームはAR.jsがカメラを起動する前に閉じる。
+        if (permissionTestStream) {
+          permissionTestStream.getTracks().forEach(track => track.stop());
+        }
+      }
       // AR.js のイベント監視を先に登録し、初期化直後のイベント取りこぼしを防ぐ。
       arCameraInitHandler = () => {
         adoptARVideo();
@@ -1089,8 +1115,10 @@
           arStartTimeout = null;
         }
       };
-      arCameraErrorHandler = () => {
-        setARStatus("カメラを起動できません。ブラウザのカメラ許可とHTTPSを確認してください。", true);
+      arCameraErrorHandler = (event) => {
+        const detail = event && event.detail;
+        const reason = detail && (detail.error || detail.message);
+        setARStatus("AR.jsがカメラ映像を開始できませんでした。Chromeのサイト設定でカメラを許可し、他のカメラアプリを閉じてから再試行してください。" + (reason ? " 詳細: " + String(reason) : ""), true);
       };
       window.addEventListener("camera-init", arCameraInitHandler);
       window.addEventListener("camera-error", arCameraErrorHandler);
