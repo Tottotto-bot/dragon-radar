@@ -479,7 +479,7 @@
     <div class="dev-coords" id="devCoords"></div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "dragonRadarConfig";
     const isSecure = window.isSecureContext === true;
@@ -501,6 +501,7 @@
     let watchId = null;
     let selectedBall = 1;
     let map = null, markers = {}, userMarker = null;
+    let beepTimer = null; // 接近音のタイマー管理用
 
     // 方位管理用の変数
     let gpsInitialized = false;
@@ -554,6 +555,8 @@
     function placeBallsOnRadar(){
       if(!userPos) return;
       const range = Number(config.rangeMeters) || 500;
+      let overlappingCount = 0; // 半分以上かぶっているボールの数をカウント
+
       config.balls.forEach((ball, i) => {
         const dot = dots[i];
         if(!dot) return;
@@ -581,12 +584,30 @@
         const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
         if(centerDist < 3.8){
           dot.classList.add("fast-blink");
+          overlappingCount++; // かぶっているボールを発見
         } else {
           dot.classList.remove("fast-blink");
         }
         
         if(ballsShown) dot.classList.add("show");
       });
+
+      // --- 音の自動再生・停止の制御 ---
+      if (overlappingCount > 0) {
+        // 半分以上かぶっているボールがある場合
+        if (!beepTimer) {
+          playRadarBeep(); // すぐに1回鳴らす
+          beepTimer = setInterval(() => {
+            playRadarBeep(); // 1秒ごとに鳴らす
+          }, 1000);
+        }
+      } else {
+        // すべて離れた（半分以下になった）場合
+        if (beepTimer) {
+          clearInterval(beepTimer);
+          beepTimer = null;
+        }
+      }
     }
 
     async function loadConfig(){
@@ -615,6 +636,22 @@
       if(audioCtx.state === "suspended") audioCtx.resume();
       return audioCtx;
     }
+    
+    // 【追加・対策】最初にボタンを押したタイミングでAudioContextを完全に目覚めさせる処理
+    function unlockAudioContext() {
+      const ctx = ensureAudio();
+      if(!ctx) return;
+      // ごく短い無音の音を強制的に鳴らしてブラウザの制限を完全にクリアする
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch(e) {}
+    }
+
+    // ボタンを押したときの音
     function playPochitt(){
       const ctx = ensureAudio();
       if(!ctx) return;
@@ -641,6 +678,29 @@
       thud.start(t);
       thud.stop(t + 0.12);
     }
+
+    // 1秒に1回鳴る「ピッ」という接近音
+    function playRadarBeep() {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = "square";
+      osc.frequency.setValueAtTime(2200, t); // 高めの「ピッ」
+      
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(t);
+      osc.stop(t + 0.05);
+    }
+
     function showBallsLater(){
       if(ballsShown || ballsTimer) return;
       ballsTimer = setTimeout(() => {
@@ -671,7 +731,6 @@
 
       // iOS 13以降のパーミッション要求が必要な場合の処理
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // 同期的に一度リクエストを試す、または直接リスナーを登録してみる
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
@@ -687,7 +746,6 @@
         // Androidや許可不要のブラウザ
         window.addEventListener('deviceorientation', handleOrientation, { once: true });
         
-        // 万が一イベントが発火しない場合のタイムアウト対策
         setTimeout(() => {
           if (headingOffset === 0) {
             setGpsStatus("方位データが取得できませんでした（端末を動かしてみてください）", "ng");
@@ -711,6 +769,9 @@
     function handleScanButton(){
       if(busy) return;
       busy = true;
+
+      // 【追加】ボタンが押された瞬間にオーディオのロックを確実に解除する
+      unlockAudioContext();
       playPochitt();
 
       if(!gpsInitialized){
