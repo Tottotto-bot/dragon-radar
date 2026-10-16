@@ -162,7 +162,7 @@
     .top-knob{
       display:block;
       position:absolute;
-      left:37.0%; top:5.%;
+      left:37.0%; top:5.2%;
       width:24.4%; height:11%;
       transform:none;
       padding:0;
@@ -442,22 +442,82 @@
       display: block;
     }
 
-    /* ARカメラモーダル（全画面を覆い、背景を透明にしてカメラを通す） */
+    /* ARカメラ：全画面表示。カメラ映像・ARキャンバス・操作UIの重なり順を固定 */
     .ar-modal {
       display: none;
       position: fixed;
       inset: 0;
-      z-index: 100;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      z-index: 10000;
+      /* AR.js の video 要素は body 直下に作られるため、モーダル背景は透明にする */
+      background: transparent;
+      isolation: isolate;
+    }
+    .ar-modal.open { display: block; }
+    #arContainer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
       background: transparent;
     }
-    .ar-modal.open {
-      display: block;
+    #arContainer a-scene {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      overflow: hidden !important;
+      z-index: 1 !important;
+      background: transparent !important;
     }
+    #arContainer canvas.a-canvas {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      z-index: 2 !important;
+      pointer-events: none !important;
+    }
+    /* AR.js が生成する実カメラ映像 */
+    .arjs-video {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      object-fit: cover !important;
+      /* body 直下の映像を透明なモーダル越しに表示し、ARキャンバスをその上に重ねる */
+      z-index: 9999 !important;
+      background: #000;
+    }
+    .ar-status {
+      position: fixed;
+      left: 50%;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 10002;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.78);
+      color: #fff;
+      font: 700 14px/1.5 "Noto Sans JP", sans-serif;
+      text-align: center;
+      pointer-events: none;
+    }
+    .ar-status.error { background: rgba(150,0,0,.88); }
     .ar-close-btn {
       position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 999;
+      top: max(16px, env(safe-area-inset-top));
+      right: max(16px, env(safe-area-inset-right));
+      z-index: 10003;
       padding: 10px 20px;
       background: #ff4b3f;
       color: #fff;
@@ -467,6 +527,7 @@
       font-size: 14px;
       cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      touch-action: manipulation;
     }
 
     @media (max-height:700px){
@@ -542,9 +603,10 @@
   </div>
 
   <!-- ARカメラモーダル -->
-  <div class="ar-modal" id="arModal">
+  <div class="ar-modal" id="arModal" aria-label="ARマーカー読み取り画面">
+    <div id="arContainer"></div>
+    <div class="ar-status" id="arStatus" role="status" aria-live="polite">カメラを準備しています…</div>
     <button class="ar-close-btn" id="arCloseBtn" type="button">閉じる</button>
-    <div id="arContainer" style="width:100%; height:100%;"></div>
   </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -561,6 +623,12 @@
     const arModal = document.getElementById("arModal");
     const arCloseBtn = document.getElementById("arCloseBtn");
     const arContainer = document.getElementById("arContainer");
+    const arStatus = document.getElementById("arStatus");
+    let arStarting = false;
+    let arStartTimeout = null;
+    let arCameraReady = false;
+    let arCameraInitHandler = null;
+    let arCameraErrorHandler = null;
 
     const defaultConfig = () => ({
       rangeMeters: 500,
@@ -930,16 +998,92 @@
       }
     }
 
-    // ★修正：ボタンを押した時にレーダー画面（appMain）を非表示にし、ARシーンを生成して開く
-    qrScanBtn.addEventListener("click", () => {
+    // Hiroパターンマーカー用ARを開始する。既存のGPS・レーダー処理には触れない。
+    function setARStatus(message, isError = false) {
+      arStatus.textContent = message;
+      arStatus.classList.toggle("error", isError);
+      arStatus.style.display = "block";
+    }
+
+    function cleanupAR() {
+      if (arStartTimeout) {
+        clearTimeout(arStartTimeout);
+        arStartTimeout = null;
+      }
+      if (arCameraInitHandler) {
+        window.removeEventListener("camera-init", arCameraInitHandler);
+        arCameraInitHandler = null;
+      }
+      if (arCameraErrorHandler) {
+        window.removeEventListener("camera-error", arCameraErrorHandler);
+        arCameraErrorHandler = null;
+      }
+
+      // AR.js のカメラ映像ストリームを明示的に停止する。
+      document.querySelectorAll(".arjs-video, #arContainer video").forEach((video) => {
+        try { video.pause(); } catch (e) {}
+        try {
+          if (video.srcObject && typeof video.srcObject.getTracks === "function") {
+            video.srcObject.getTracks().forEach(track => track.stop());
+          }
+        } catch (e) {}
+        try { video.srcObject = null; } catch (e) {}
+        try { video.remove(); } catch (e) {}
+      });
+
+      const scene = arContainer.querySelector("a-scene");
+      if (scene) {
+        try { if (scene.systems && scene.systems.arjs) scene.systems.arjs.pause(); } catch (e) {}
+        try { if (scene.renderer) scene.renderer.dispose(); } catch (e) {}
+        try { if (scene.pause) scene.pause(); } catch (e) {}
+      }
+      arContainer.innerHTML = "";
+      arCameraReady = false;
+      arStarting = false;
+    }
+
+    function startAR() {
+      if (arStarting) return;
+      arStarting = true;
+      arCameraReady = false;
       unlockAudioContext();
       playPochitt();
-      
-      appMain.classList.add("hidden"); // レーダー画面を隠す
-      
+
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        appMain.classList.add("hidden");
+        arModal.classList.add("open");
+        setARStatus("カメラを使うにはHTTPSのページを、対応ブラウザで開いてください。", true);
+        arStarting = false;
+        return;
+      }
+
+      // 先にモーダルを表示してからシーンを作成し、初期化時のサイズ計算を安定させる。
+      appMain.classList.add("hidden");
+      arModal.classList.add("open");
+      setARStatus("カメラの許可を確認しています…");
+      // AR.js のイベント監視を先に登録し、初期化直後のイベント取りこぼしを防ぐ。
+      arCameraInitHandler = () => {
+        arCameraReady = true;
+        setARStatus("カメラ起動済みです。白黒のHiroマーカーを画面に映してください。");
+        if (arStartTimeout) {
+          clearTimeout(arStartTimeout);
+          arStartTimeout = null;
+        }
+      };
+      arCameraErrorHandler = () => {
+        setARStatus("カメラを起動できません。ブラウザのカメラ許可とHTTPSを確認してください。", true);
+      };
+      window.addEventListener("camera-init", arCameraInitHandler);
+      window.addEventListener("camera-error", arCameraErrorHandler);
+
       arContainer.innerHTML = `
-        <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" vr-mode-ui="enabled: false;" style="width:100%; height:100%;">
-          <a-marker preset="hiro">
+        <a-scene
+          embedded
+          vr-mode-ui="enabled: false"
+          renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true"
+          arjs="sourceType: webcam; debugUIEnabled: false;"
+          style="width:100%;height:100%;">
+          <a-marker preset="hiro" smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
             <a-entity position="0 0.5 0">
               <a-sphere radius="0.4" material="color: #ff8c00; roughness: 0.1; metalness: 0.1; opacity: 0.9; transparent: true;"></a-sphere>
               <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear;">
@@ -949,16 +1093,25 @@
             </a-entity>
           </a-marker>
           <a-entity camera></a-entity>
-        </a-scene>
-      `;
-      arModal.classList.add("open");
-    });
+        </a-scene>`;
 
-    // ★修正：閉じるボタン：ARを終了し、レーダー画面を再表示する
+      arStartTimeout = setTimeout(() => {
+        if (!arCameraReady) {
+          setARStatus("カメラの起動に時間がかかっています。カメラ許可・HTTPS・他アプリでカメラを使用中でないか確認してください。", true);
+        }
+      }, 12000);
+    }
+
+    qrScanBtn.addEventListener("click", startAR);
+
+    // ARを閉じる時はカメラのトラックも明示的に停止し、元のレーダー画面へ戻る。
     arCloseBtn.addEventListener("click", () => {
       arModal.classList.remove("open");
-      arContainer.innerHTML = ""; // シーンを空にしてカメラを停止・解放
-      appMain.classList.remove("hidden"); // レーダー画面を元に戻す
+      cleanupAR();
+      arStatus.classList.remove("error");
+      arStatus.textContent = "カメラを準備しています…";
+      arStatus.style.display = "block";
+      appMain.classList.remove("hidden");
     });
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
