@@ -757,15 +757,19 @@
         {enableHighAccuracy:false, maximumAge:60000}
       );
     }
-    function scanHeading(){
-      setGpsStatus("方位をスキャンしています…", "wait");
+    let orientationActive = false;  // 方位センサーが常時稼働中かどうか
+
+    function startOrientationTracking(){
+      if(orientationActive) return;
 
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS: ユーザージェスチャー内で1回だけ許可を求める
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
-              window.removeEventListener('deviceorientation', handleOrientation);
-              window.addEventListener('deviceorientation', handleOrientation);
+              window.addEventListener('deviceorientation', handleOrientationContinuous);
+              orientationActive = true;
+              setGpsStatus("方位センサー：追従中", "ok");
             } else {
               setGpsStatus("方位センサーの許可が拒否されました", "ng");
             }
@@ -774,26 +778,24 @@
             setGpsStatus("方位の取得に失敗しました", "ng");
           });
       } else {
-        window.removeEventListener('deviceorientation', handleOrientation);
-        window.addEventListener('deviceorientation', handleOrientation);
+        // Android / PC: 許可不要でそのまま登録
+        window.addEventListener('deviceorientation', handleOrientationContinuous);
+        orientationActive = true;
         
+        // 2秒後にデータが来ていなければ警告
         setTimeout(() => {
-          if (headingOffset === 0) {
+          if (headingOffset === 0 && orientationActive) {
             setGpsStatus("方位データが取得できませんでした（端末を動かしてみてください）", "ng");
           }
         }, 2000);
       }
     }
 
-    function handleOrientation(event){
+    function handleOrientationContinuous(event){
       const alpha = event.alpha;
       if(alpha != null){
         headingOffset = alpha;
         placeBallsOnRadar();
-        setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
-        window.removeEventListener('deviceorientation', handleOrientation);
-      } else {
-        setGpsStatus("方位データを取得できませんでした", "ng");
       }
     }
 
@@ -819,7 +821,7 @@
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             applyUserPosition(pos.coords.latitude, pos.coords.longitude);
-            setGpsStatus("位置情報：取得完了（タップで方位スキャン）", "ok");
+            setGpsStatus("位置情報：取得完了（タップで方位スキャン開始）", "ok");
             screen.classList.add("on");
             showBallsLater();
             startWatch();
@@ -834,7 +836,12 @@
           {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
         );
       } else {
-        scanHeading();
+        // 2回目以降：方位センサーを開始（既に動いていればメッセージだけ更新）
+        if(!orientationActive){
+          startOrientationTracking();
+        } else {
+          setGpsStatus("方位センサー：追従中", "ok");
+        }
         busy = false;
       }
     }
