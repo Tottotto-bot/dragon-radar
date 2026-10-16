@@ -541,6 +541,7 @@
     }
 
     let gpsInitialized = false;
+    let orientationPermissionGranted = false; // ★追加：方位センサーの許可状態を保持するフラグ
     let headingOffset = 0;
     let latestAlpha = null; // 直近の方位データ
 
@@ -807,22 +808,25 @@
         }, 400);
       };
 
-      // iOSのパーミッション確認が必要な場合
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(response => {
-            if (response === 'granted') {
-              executeScan();
-            } else {
-              setGpsStatus("方位センサーの許可が拒否されました", "ng");
-            }
-          })
-          .catch(() => {
-            executeScan(); // 失敗時もフォールバック実行
-          });
-      } else {
+      // ★追加・修正：すでに許可済み、またはiOS以外の環境の場合は、重いパーミッション要求をスキップして直接実行する
+      if (orientationPermissionGranted || typeof DeviceOrientationEvent === 'undefined' || typeof DeviceOrientationEvent.requestPermission !== 'function') {
         executeScan();
+        return;
       }
+
+      // 初回のみiOSのパーミッション確認を行う
+      DeviceOrientationEvent.requestPermission()
+        .then(response => {
+          if (response === 'granted') {
+            orientationPermissionGranted = true; // 許可されたらフラグを立てる
+            executeScan();
+          } else {
+            setGpsStatus("方位センサーの許可が拒否されました", "ng");
+          }
+        })
+        .catch(() => {
+          executeScan(); // 失敗時もフォールバック実行
+        });
     }
 
     function handleScanButton(){
