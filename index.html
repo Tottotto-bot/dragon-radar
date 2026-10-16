@@ -12,6 +12,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Noto+Sans+JP:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- A-Frame & AR.js の読み込み -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
   <style>
     :root{
       --bg:#050505;
@@ -255,7 +260,6 @@
       50%{transform:translate(-50%,-50%) scale(1.08); opacity:.88}
     }
 
-    /* --- ドラゴンボール点滅：JSで同期制御するため、CSSアニメーションは使わない --- */
     .target-dot{
       position:absolute;
       width:14px;
@@ -269,8 +273,6 @@
       visibility:hidden;
       transition:left .6s ease, top .6s ease;
     }
-    
-    /* showクラスで表示。点滅のON/OFFはJSがblink-offクラスで制御 */
     .screen.balls .target-dot.show{
       visibility:visible;
       opacity:1;
@@ -280,7 +282,6 @@
       opacity:.22;
       transform:scale(.86);
     }
-    /* fast-blinkドットも同様（JSが別タイマーで制御） */
     .screen.balls .target-dot.show.fast-blink{
       opacity:1;
       transform:scale(1);
@@ -289,7 +290,6 @@
       opacity:.22;
       transform:scale(.86);
     }
-    /* -------------------------------------------------------------------- */
 
     .gps-status{
       margin-top:18px;
@@ -416,7 +416,7 @@
       color:#9f9;
     }
 
-    /* ★追加：大きめのQRコード起動ボタンのデザイン */
+    /* QRコード読み取りボタン */
     .qr-scan-btn {
       display: none;
       margin-top: 12px;
@@ -439,40 +439,23 @@
       display: block;
     }
 
-    /* ★追加：カメラプレビュー・モーダルのスタイル */
-    .qr-modal {
+    /* ARカメラモーダル（A-Frame / AR.js用） */
+    .ar-modal {
       display: none;
       position: fixed;
       inset: 0;
-      z-index: 50;
-      background: rgba(0, 0, 0, 0.95);
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      font-family: "Noto Sans JP", sans-serif;
+      z-index: 100;
+      background: #000;
     }
-    .qr-modal.open {
-      display: flex;
+    .ar-modal.open {
+      display: block;
     }
-    .qr-video-wrap {
-      width: 100%;
-      max-width: 400px;
-      aspect-ratio: 1 / 1;
-      position: relative;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 2px solid #ffe500;
-      background: #111;
-    }
-    .qr-video-wrap video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .qr-close-btn {
-      margin-top: 20px;
-      padding: 10px 24px;
+    .ar-close-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 999;
+      padding: 10px 20px;
       background: #ff4b3f;
       color: #fff;
       border: 0;
@@ -480,6 +463,7 @@
       font-weight: 700;
       font-size: 14px;
       cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
     }
 
     @media (max-height:700px){
@@ -528,7 +512,6 @@
       </div>
     </div>
     <div class="gps-status" id="gpsStatus"></div>
-    <!-- ★追加：QRコード読み取りボタン -->
     <button class="qr-scan-btn" id="qrScanBtn" type="button">QRコードを読み取る</button>
   </div>
 
@@ -555,13 +538,26 @@
     <div class="dev-coords" id="devCoords"></div>
   </div>
 
-  <!-- ★追加：カメラ映像を表示するモーダル -->
-  <div class="qr-modal" id="qrModal">
-    <div class="qr-video-wrap">
-      <video id="qrVideo" autoplay playsinline muted></video>
-    </div>
-    <p style="color:#ffe500; font-size:13px; margin-top:12px; text-align:center;">QRコードをカメラにかざしてください</p>
-    <button class="qr-close-btn" id="qrCloseBtn" type="button">閉じる</button>
+  <!-- AR.js カメラ表示モーダル -->
+  <div class="ar-modal" id="arModal">
+    <button class="ar-close-btn" id="arCloseBtn" type="button">閉じる</button>
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" vr-mode-ui="enabled: false;" style="width:100%; height:100%;">
+      <!-- マーカー認識（HiroマーカーをQRコードの代わりとして使用） -->
+      <a-marker preset="hiro">
+        <!-- 3Dドラゴンボールのエンティティ -->
+        <a-entity position="0 0.5 0">
+          <!-- ガラス玉のような半透明オレンジの球体 -->
+          a-sphere radius="0.4" material="color: #ff8c00; roughness: 0.1; metalness: 0.1; opacity: 0.9; transparent: true;"></a-sphere>
+          <!-- 中の星（回転アニメーション付きの赤い立体パーツ） -->
+          <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear;">
+            <a-box width="0.12" height="0.12" depth="0.02" color="#ff1a1a" position="0 0 0"></a-box>
+          </a-entity>
+          <!-- 足元の黄金のオーラ（リング） -->
+          <a-ring radius-inner="0.45" radius-outer="0.55" rotation="-90 0 0" material="color: #ffe65b; opacity: 0.7; transparent: true;"></a-ring>
+        </a-entity>
+      </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
   </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -573,12 +569,10 @@
     const gpsStatus = document.getElementById("gpsStatus");
     const dots = [...document.querySelectorAll(".target-dot")];
 
-    // ★追加：QRコード関連の要素
-    let mediaStream = null;
+    // ARモーダル関連の要素
     const qrScanBtn = document.getElementById("qrScanBtn");
-    const qrModal = document.getElementById("qrModal");
-    const qrVideo = document.getElementById("qrVideo");
-    const qrCloseBtn = document.getElementById("qrCloseBtn");
+    const arModal = document.getElementById("arModal");
+    const arCloseBtn = document.getElementById("arCloseBtn");
 
     const defaultConfig = () => ({
       rangeMeters: 500,
@@ -595,7 +589,6 @@
     let map = null, markers = {}, userMarker = null;
     let beepTimer = null;
     
-    /* --- 同期点滅タイマー --- */
     let normalBlinkTimer = null;
     let fastBlinkTimer = null;
     let normalBlinkState = true;
@@ -625,9 +618,9 @@
     }
 
     let gpsInitialized = false;
-    let orientationPermissionGranted = false; // 方位センサーの許可状態を保持するフラグ
+    let orientationPermissionGranted = false;
     let headingOffset = 0;
-    let latestAlpha = null; // 直近の方位データ
+    let latestAlpha = null;
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -678,7 +671,6 @@
       if(!userPos) return;
       const range = Number(config.rangeMeters) || 500;
       
-      // 1. 範囲内にあるボールの中で、GPS実距離が最も近いものを1つだけ特定する
       let closestBallIndex = -1;
       let minDst = Infinity;
 
@@ -717,10 +709,8 @@
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
-        // 画面上の中心からの距離を計算
         const centerDist = Math.sqrt((left - 50) ** 2 + (top - 50) ** 2);
         
-        // 2. 「一番近いボール」であり、かつ中心の三角に「半分ほど被った（距離が5.2以内に入った）」場合のみ高速点滅にする
         if(i === closestBallIndex && centerDist < 5.2){
           dot.classList.add("fast-blink");
           dot.classList.toggle("blink-off", !fastBlinkState);
@@ -734,7 +724,7 @@
       });
 
       if (overlappingCount > 0) {
-        qrScanBtn.classList.add("show"); // 重なっている間だけボタンを表示
+        qrScanBtn.classList.add("show");
         if (!beepTimer) {
           playRadarBeep();
           beepTimer = setInterval(() => {
@@ -742,7 +732,7 @@
           }, 1000);
         }
       } else {
-        qrScanBtn.classList.remove("show"); // 離れたらボタンを隠す
+        qrScanBtn.classList.remove("show");
         if (beepTimer) {
           clearInterval(beepTimer);
           beepTimer = null;
@@ -863,7 +853,6 @@
       );
     }
 
-    /* --- ボタンを押した瞬間にセンサーを必ず起こして最新値を取得する確実なスキャン --- */
     function scanHeading(){
       setGpsStatus("方位をスキャンしています…", "wait");
 
@@ -953,49 +942,15 @@
       }
     }
 
-    // ★追加：カメラ起動・停止処理（例外処理・安全対策済み）
-    async function startCamera(){
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("このブラウザまたは端末ではカメラ機能がサポートされていません。");
-        return;
-      }
-
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" } // 背面カメラ優先
-        });
-        qrVideo.srcObject = mediaStream;
-        qrModal.classList.add("open");
-      } catch (err) {
-        console.error("Camera error:", err);
-        let errorMsg = "カメラを起動できませんでした。";
-        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-          errorMsg = "カメラのアクセス権限が拒否されています。ブラウザの設定から許可してください。";
-        } else if (err.name === "NotFoundError") {
-          errorMsg = "利用可能なカメラが見つかりませんでした。";
-        }
-        alert(errorMsg);
-      }
-    }
-
-    function stopCamera(){
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-        mediaStream = null;
-      }
-      qrVideo.srcObject = null;
-      qrModal.classList.remove("open");
-    }
-
-    // ★追加：QRボタン・閉じるボタンのイベント設定
+    // ARモーダルの開閉処理
     qrScanBtn.addEventListener("click", () => {
       unlockAudioContext();
       playPochitt();
-      startCamera();
+      arModal.classList.add("open");
     });
 
-    qrCloseBtn.addEventListener("click", () => {
-      stopCamera();
+    arCloseBtn.addEventListener("click", () => {
+      arModal.classList.remove("open");
     });
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
@@ -1115,7 +1070,7 @@
         config.rangeMeters = Number(rangeInput.value) || 500;
         localStorage.setItem(STORAGE_KEY, configJSON());
         placeBallsOnRadar();
-        alert("この端末に保存しました。");
+        alert("This device has been saved.");
       };
       document.getElementById("copyBtn").onclick = async () => {
         config.rangeMeters = Number(rangeInput.value) || 500;
