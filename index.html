@@ -508,6 +508,7 @@
     let selectedBall = 1;
     let map = null, markers = {}, userMarker = null;
     let beepTimer = null;
+    
     /* --- 同期点滅タイマー --- */
     let normalBlinkTimer = null;
     let fastBlinkTimer = null;
@@ -520,7 +521,6 @@
         normalBlinkTimer = setInterval(() => {
           normalBlinkState = !normalBlinkState;
           dots.forEach(dot => {
-            // fast-blinkドットは別タイマーで制御するのでスキップ
             if(dot.classList.contains("fast-blink")) return;
             if(!dot.classList.contains("show")) return;
             dot.classList.toggle("blink-off", !normalBlinkState);
@@ -618,12 +618,10 @@
         const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
         if(centerDist < 3.8){
           dot.classList.add("fast-blink");
-          // fast-blinkドットは高速タイマーの現在状態に即座に同期
           dot.classList.toggle("blink-off", !fastBlinkState);
           overlappingCount++;
         } else {
           dot.classList.remove("fast-blink");
-          // 通常点滅タイマーの現在状態に即座に同期
           dot.classList.toggle("blink-off", !normalBlinkState);
         }
         
@@ -757,19 +755,17 @@
         {enableHighAccuracy:false, maximumAge:60000}
       );
     }
-    let orientationActive = false;  // 方位センサーが常時稼働中かどうか
 
-    function startOrientationTracking(){
-      if(orientationActive) return;
+    /* --- 方位スキャン機能（ボタンを押した瞬間だけ安全に取得し、何度でも再実行可能） --- */
+    function scanHeading(){
+      setGpsStatus("方位をスキャンしています…", "wait");
 
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // iOS: ユーザージェスチャー内で1回だけ許可を求める
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
-              window.addEventListener('deviceorientation', handleOrientationContinuous);
-              orientationActive = true;
-              setGpsStatus("方位センサー：追従中", "ok");
+              window.removeEventListener('deviceorientation', handleOrientation);
+              window.addEventListener('deviceorientation', handleOrientation);
             } else {
               setGpsStatus("方位センサーの許可が拒否されました", "ng");
             }
@@ -778,24 +774,27 @@
             setGpsStatus("方位の取得に失敗しました", "ng");
           });
       } else {
-        // Android / PC: 許可不要でそのまま登録
-        window.addEventListener('deviceorientation', handleOrientationContinuous);
-        orientationActive = true;
+        window.removeEventListener('deviceorientation', handleOrientation);
+        window.addEventListener('deviceorientation', handleOrientation);
         
-        // 2秒後にデータが来ていなければ警告
         setTimeout(() => {
-          if (headingOffset === 0 && orientationActive) {
+          if (headingOffset === 0) {
             setGpsStatus("方位データが取得できませんでした（端末を動かしてみてください）", "ng");
           }
         }, 2000);
       }
     }
 
-    function handleOrientationContinuous(event){
+    function handleOrientation(event){
       const alpha = event.alpha;
       if(alpha != null){
         headingOffset = alpha;
         placeBallsOnRadar();
+        setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+        // 1回取得したら、勝手に動き続けずその場で安定させるためリスナーを外す
+        window.removeEventListener('deviceorientation', handleOrientation);
+      } else {
+        setGpsStatus("方位データを取得できませんでした", "ng");
       }
     }
 
@@ -821,7 +820,7 @@
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             applyUserPosition(pos.coords.latitude, pos.coords.longitude);
-            setGpsStatus("位置情報：取得完了（タップで方位スキャン開始）", "ok");
+            setGpsStatus("位置情報：取得完了（タップで方位スキャン）", "ok");
             screen.classList.add("on");
             showBallsLater();
             startWatch();
@@ -836,12 +835,8 @@
           {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
         );
       } else {
-        // 2回目以降：方位センサーを開始（既に動いていればメッセージだけ更新）
-        if(!orientationActive){
-          startOrientationTracking();
-        } else {
-          setGpsStatus("方位センサー：追従中", "ok");
-        }
+        // 2回目以降：ボタンを押すたびに方位を新しくスキャンする
+        scanHeading();
         busy = false;
       }
     }
@@ -1016,5 +1011,3 @@
       setGpsStatus("スマホで位置情報を使うには、HTTPSのサイトで開いてください", "wait");
     }
   </script>
-</body>
-</html>
