@@ -630,8 +630,11 @@
         dot.style.left = left + "%";
         dot.style.top = top + "%";
         
-        // 2. 「一番近いボール」に選ばれたものだけを高速点滅（fast-blink）にする
-        if(i === closestBallIndex){
+        // 画面上の中心からの距離を計算
+        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 53) ** 2);
+        
+        // 2. 「一番近いボール」であり、かつ中心の三角に「半分ほど被った（距離が5.2以内に入った）」場合のみ高速点滅にする
+        if(i === closestBallIndex && centerDist < 5.2){
           dot.classList.add("fast-blink");
           dot.classList.toggle("blink-off", !fastBlinkState);
           overlappingCount++;
