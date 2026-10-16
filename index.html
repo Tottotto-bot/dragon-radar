@@ -512,11 +512,10 @@
     /* --- 同期点滅タイマー --- */
     let normalBlinkTimer = null;
     let fastBlinkTimer = null;
-    let normalBlinkState = true;  // true=表示, false=消灯
+    let normalBlinkState = true;
     let fastBlinkState = true;
 
     function startBlinkTimers(){
-      // 通常点滅：3.4秒周期（1.7秒ON、1.7秒OFF）
       if(!normalBlinkTimer){
         normalBlinkTimer = setInterval(() => {
           normalBlinkState = !normalBlinkState;
@@ -527,7 +526,6 @@
           });
         }, 1700);
       }
-      // 高速点滅：1.0秒周期（0.5秒ON、0.5秒OFF）
       if(!fastBlinkTimer){
         fastBlinkTimer = setInterval(() => {
           fastBlinkState = !fastBlinkState;
@@ -542,6 +540,8 @@
 
     let gpsInitialized = false;
     let headingOffset = 0;
+    let latestAlpha = null;       // 裏で常に保持しておく最新の方位データ
+    let orientationListening = false; // センサー監視が開始されたかどうか
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -756,45 +756,44 @@
       );
     }
 
-    /* --- 方位スキャン機能（ボタンを押した瞬間だけ安全に取得し、何度でも再実行可能） --- */
-    function scanHeading(){
-      setGpsStatus("方位をスキャンしています…", "wait");
+    /* --- 方位センサーのバックグラウンド監視＆ボタン押下時の手動スキャン --- */
+    function initOrientationSensor(){
+      if(orientationListening) return;
+
+      const registerListener = () => {
+        window.addEventListener('deviceorientation', (event) => {
+          if(event.alpha != null){
+            latestAlpha = event.alpha; // 裏で最新値を常にストックしておく
+          }
+        });
+        orientationListening = true;
+      };
 
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
-              window.removeEventListener('deviceorientation', handleOrientation);
-              window.addEventListener('deviceorientation', handleOrientation);
-            } else {
-              setGpsStatus("方位センサーの許可が拒否されました", "ng");
+              registerListener();
             }
           })
-          .catch(() => {
-            setGpsStatus("方位の取得に失敗しました", "ng");
-          });
+          .catch(() => {});
       } else {
-        window.removeEventListener('deviceorientation', handleOrientation);
-        window.addEventListener('deviceorientation', handleOrientation);
-        
-        setTimeout(() => {
-          if (headingOffset === 0) {
-            setGpsStatus("方位データが取得できませんでした（端末を動かしてみてください）", "ng");
-          }
-        }, 2000);
+        registerListener();
       }
     }
 
-    function handleOrientation(event){
-      const alpha = event.alpha;
-      if(alpha != null){
-        headingOffset = alpha;
+    function scanHeading(){
+      // 初回または未許可ならセンサーを初期化
+      if(!orientationListening){
+        initOrientationSensor();
+      }
+
+      if(latestAlpha != null){
+        headingOffset = latestAlpha; // ボタンを押した瞬間の最新値を確定！
         placeBallsOnRadar();
         setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
-        // 1回取得したら、勝手に動き続けずその場で安定させるためリスナーを外す
-        window.removeEventListener('deviceorientation', handleOrientation);
       } else {
-        setGpsStatus("方位データを取得できませんでした", "ng");
+        setGpsStatus("方位データを取得中…（端末を少し動かしてください）", "wait");
       }
     }
 
@@ -824,6 +823,7 @@
             screen.classList.add("on");
             showBallsLater();
             startWatch();
+            initOrientationSensor(); // センサーのバックグラウンド監視も開始
             gpsInitialized = true;
             busy = false;
           },
@@ -835,7 +835,7 @@
           {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
         );
       } else {
-        // 2回目以降：ボタンを押すたびに方位を新しくスキャンする
+        // 2回目以降：ボタンを押すたびに、その瞬間の最新方位でスキャンを確定する
         scanHeading();
         busy = false;
       }
@@ -932,7 +932,7 @@
 
       document.getElementById("gpsBtn").onclick = () => {
         if(!navigator.geolocation){
-          alert("この端末では位置情報を使えません");
+          alert("This device does not support location info");
           return;
         }
         navigator.geolocation.getCurrentPosition(
