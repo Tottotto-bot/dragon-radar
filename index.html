@@ -540,8 +540,7 @@
 
     let gpsInitialized = false;
     let headingOffset = 0;
-    let latestAlpha = null;       // 裏で常に保持しておく最新の方位データ
-    let orientationListening = false; // センサー監視が開始されたかどうか
+    let latestAlpha = null; // 直近の方位データ
 
     function setGpsStatus(text, type){
       gpsStatus.textContent = text;
@@ -756,44 +755,52 @@
       );
     }
 
-    /* --- 方位センサーのバックグラウンド監視＆ボタン押下時の手動スキャン --- */
-    function initOrientationSensor(){
-      if(orientationListening) return;
+    /* --- ボタンを押した瞬間にセンサーを必ず起こして最新値を取得する確実なスキャン --- */
+    function scanHeading(){
+      setGpsStatus("方位をスキャンしています…", "wait");
 
-      const registerListener = () => {
-        window.addEventListener('deviceorientation', (event) => {
+      const executeScan = () => {
+        // 毎回確実に最新のイベントを1回キャッチするためのリスナーを一時登録
+        const tempListener = (event) => {
           if(event.alpha != null){
-            latestAlpha = event.alpha; // 裏で最新値を常にストックしておく
+            latestAlpha = event.alpha;
+            headingOffset = latestAlpha;
+            placeBallsOnRadar();
+            setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+            window.removeEventListener('deviceorientation', tempListener);
           }
-        });
-        orientationListening = true;
+        };
+
+        window.addEventListener('deviceorientation', tempListener);
+
+        // 万が一イベントが来ない場合でも、すでに保持しているデータがあればそれを即座に適用するフォールバック
+        setTimeout(() => {
+          window.removeEventListener('deviceorientation', tempListener);
+          if(latestAlpha != null){
+            headingOffset = latestAlpha;
+            placeBallsOnRadar();
+            setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+          } else {
+            setGpsStatus("方位データを取得できませんでした（端末を少し動かしてみてください）", "ng");
+          }
+        }, 400);
       };
 
+      // iOSのパーミッション確認が必要な場合
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(response => {
             if (response === 'granted') {
-              registerListener();
+              executeScan();
+            } else {
+              setGpsStatus("方位センサーの許可が拒否されました", "ng");
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            executeScan(); // 失敗時もフォールバック実行
+          });
       } else {
-        registerListener();
-      }
-    }
-
-    function scanHeading(){
-      // 初回または未許可ならセンサーを初期化
-      if(!orientationListening){
-        initOrientationSensor();
-      }
-
-      if(latestAlpha != null){
-        headingOffset = latestAlpha; // ボタンを押した瞬間の最新値を確定！
-        placeBallsOnRadar();
-        setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
-      } else {
-        setGpsStatus("方位データを取得中…（端末を少し動かしてください）", "wait");
+        executeScan();
       }
     }
 
@@ -823,7 +830,6 @@
             screen.classList.add("on");
             showBallsLater();
             startWatch();
-            initOrientationSensor(); // センサーのバックグラウンド監視も開始
             gpsInitialized = true;
             busy = false;
           },
@@ -835,7 +841,7 @@
           {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
         );
       } else {
-        // 2回目以降：ボタンを押すたびに、その瞬間の最新方位でスキャンを確定する
+        // 2回目以降：何回押してもその瞬間に必ず最新方位をスキャンする
         scanHeading();
         busy = false;
       }
