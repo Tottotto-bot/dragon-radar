@@ -47,6 +47,9 @@
       padding:10px 12px 16px;
       color:var(--text);
     }
+    .app.hidden {
+      display: none !important;
+    }
 
     .logo{
       width:100%;
@@ -439,7 +442,7 @@
       display: block;
     }
 
-    /* ARカメラモーダル（背景を透明にしてカメラ映像を確実に通す） */
+    /* ARカメラモーダル（全画面を覆い、背景を透明にしてカメラを通す） */
     .ar-modal {
       display: none;
       position: fixed;
@@ -475,7 +478,7 @@
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="appMain">
     <div class="logo">
       <div class="logo-en">
         <span class="word blue"><span>D</span><span>R</span><span>A</span><span>G</span><span>O</span><span>N</span></span>
@@ -538,7 +541,7 @@
     <div class="dev-coords" id="devCoords"></div>
   </div>
 
-  <!-- ARカメラモーダル（2Dイラスト表示用） -->
+  <!-- ARカメラモーダル -->
   <div class="ar-modal" id="arModal">
     <button class="ar-close-btn" id="arCloseBtn" type="button">閉じる</button>
     <div id="arContainer" style="width:100%; height:100%;"></div>
@@ -553,6 +556,7 @@
     const gpsStatus = document.getElementById("gpsStatus");
     const dots = [...document.querySelectorAll(".target-dot")];
 
+    const appMain = document.getElementById("appMain");
     const qrScanBtn = document.getElementById("qrScanBtn");
     const arModal = document.getElementById("arModal");
     const arCloseBtn = document.getElementById("arCloseBtn");
@@ -926,16 +930,23 @@
       }
     }
 
-    // ボタンを押してモーダルを開いた時に、軽量な2Dイラスト（画像）を配置するARシーンを生成
+    // ★修正：ボタンを押した時にレーダー画面（appMain）を非表示にし、ARシーンを生成して開く
     qrScanBtn.addEventListener("click", () => {
       unlockAudioContext();
       playPochitt();
       
+      appMain.classList.add("hidden"); // レーダー画面を隠す
+      
       arContainer.innerHTML = `
         <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;" vr-mode-ui="enabled: false;" style="width:100%; height:100%;">
           <a-marker preset="hiro">
-            <!-- 3Dではなく、平らなイラスト画像（例としてサンプル画像）をマーカー上に寝かせて表示 -->
-            <a-image src="https://cdn.glitch.global/1f72a445-56a9-4598-a6d5-a38435d688cf/ball_sample.png?v=1670000000000" position="0 0.1 0" rotation="-90 0 0" width="1" height="1"></a-image>
+            <a-entity position="0 0.5 0">
+              <a-sphere radius="0.4" material="color: #ff8c00; roughness: 0.1; metalness: 0.1; opacity: 0.9; transparent: true;"></a-sphere>
+              <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear;">
+                <a-box width="0.12" height="0.12" depth="0.02" color="#ff1a1a" position="0 0 0"></a-box>
+              </a-entity>
+              <a-ring radius-inner="0.45" radius-outer="0.55" rotation="-90 0 0" material="color: #ffe65b; opacity: 0.7; transparent: true;"></a-ring>
+            </a-entity>
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>
@@ -943,9 +954,11 @@
       arModal.classList.add("open");
     });
 
+    // ★修正：閉じるボタン：ARを終了し、レーダー画面を再表示する
     arCloseBtn.addEventListener("click", () => {
       arModal.classList.remove("open");
-      arContainer.innerHTML = "";
+      arContainer.innerHTML = ""; // シーンを空にしてカメラを停止・解放
+      appMain.classList.remove("hidden"); // レーダー画面を元に戻す
     });
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
