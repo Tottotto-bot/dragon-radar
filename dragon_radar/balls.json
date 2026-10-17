@@ -1,0 +1,12 @@
+{
+  "rangeMeters": 500,
+  "balls": [
+    {"id": 1, "lat": 32.832765, "lng": 129.899823, "image": "dragonball1.png"},
+    {"id": 2, "lat": null, "lng": null, "image": "dragonball2.png"},
+    {"id": 3, "lat": null, "lng": null, "image": "dragonball3.png"},
+    {"id": 4, "lat": null, "lng": null, "image": "dragonball4.png"},
+    {"id": 5, "lat": null, "lng": null, "image": "dragonball5.png"},
+    {"id": 6, "lat": null, "lng": null, "image": "dragonball6.png"},
+    {"id": 7, "lat": null, "lng": null, "image": "dragonball7.png"}
+  ]
+}
