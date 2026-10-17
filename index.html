@@ -13,9 +13,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Noto+Sans+JP:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
-  <!-- A-Frame & AR.js の読み込み -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <!-- A-Frame & MindAR の読み込み -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     :root{
@@ -419,6 +419,23 @@
       color:#9f9;
     }
 
+    /* 開発者設定内の個別画像設定用入力欄 */
+    .ball-setting-box {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+    .ball-setting-box input {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
     /* QRコード読み取りボタン */
     .qr-scan-btn {
       display: none;
@@ -442,7 +459,7 @@
       display: block;
     }
 
-    /* ARカメラ：全画面表示。カメラ映像・ARキャンバス・操作UIの重なり順を固定 */
+    /* ARカメラ：全画面表示 */
     .ar-modal {
       display: none;
       position: fixed;
@@ -452,7 +469,6 @@
       height: 100dvh;
       overflow: hidden;
       z-index: 10000;
-      /* カメラ映像もこのモーダル内へ移動させ、映像とAR描画を同じ重なり順で管理 */
       background: #000;
       isolation: isolate;
     }
@@ -484,7 +500,6 @@
       z-index: 2 !important;
       pointer-events: none !important;
     }
-    /* AR.js の映像は #arModal 内へ移し、ARキャンバスより下に置く */
     .ar-modal .arjs-video {
       position: absolute !important;
       inset: 0 !important;
@@ -576,17 +591,20 @@
       </div>
     </div>
     <div class="gps-status" id="gpsStatus"></div>
-    <button class="qr-scan-btn" id="qrScanBtn" type="button">QRコードを読み取る</button>
+    <button class="qr-scan-btn" id="qrScanBtn" type="button">カメラでドラゴンボールをのぞく</button>
   </div>
 
   <button class="dev-open" id="devOpen" type="button">開発者設定</button>
   <div class="dev-panel" id="devPanel">
     <div class="dev-head">
-      <h2>BALL LOCATIONS</h2>
+      <h2>BALL LOCATIONS & IMAGES</h2>
       <button class="dev-close" id="devClose" type="button">閉じる</button>
     </div>
-    <p class="dev-note">星の番号を選んでから地図をタップすると、そのドラゴンボールの場所になります。「現在地を取得」を押すと自分の位置に地図が移動します。</p>
+    <p class="dev-note">星の番号を選んでから地図をタップすると位置が設定されます。それぞれのドラゴンボール画像ファイル名も個別に指定できます。</p>
     <div class="dev-row" id="ballBtns"></div>
+    <div class="ball-setting-box" id="selectedBallConfig">
+      <!-- 選択中のボールの画像設定エリア -->
+    </div>
     <div id="devMap"></div>
     <div class="dev-row">
       <label>レーダー範囲
@@ -631,9 +649,10 @@
     let arCameraErrorHandler = null;
     let arVideoObserver = null;
 
+    // 1〜7個すべてのボールにデフォルトの画像名（ball_1.png 〜 ball_7.png）を持たせる
     const defaultConfig = () => ({
       rangeMeters: 500,
-      balls: [1,2,3,4,5,6,7].map(id => ({id, lat: null, lng: null}))
+      balls: [1,2,3,4,5,6,7].map(id => ({id, lat: null, lng: null, image: `ball_${id}.png`}))
     });
     let config = defaultConfig();
     let userPos = null;
@@ -811,7 +830,12 @@
         config.rangeMeters = Number(loaded.rangeMeters) || 500;
         config.balls = [1,2,3,4,5,6,7].map(id => {
           const found = loaded.balls.find(b => Number(b.id) === id) || {};
-          return {id, lat: found.lat ?? null, lng: found.lng ?? null};
+          return {
+            id,
+            lat: found.lat ?? null,
+            lng: found.lng ?? null,
+            image: found.image || `ball_${id}.png`
+          };
         });
       }
     }
@@ -999,15 +1023,12 @@
       }
     }
 
-    // Hiroパターンマーカー用ARを開始する。既存のGPS・レーダー処理には触れない。
     function setARStatus(message, isError = false) {
       arStatus.textContent = message;
       arStatus.classList.toggle("error", isError);
       arStatus.style.display = "block";
     }
 
-    // AR.js はカメラ video を document.body 直下に追加することがある。
-    // そのままだとモーダルの stacking context の裏側に隠れるため、モーダル内へ移動する。
     function adoptARVideo() {
       document.querySelectorAll("video.arjs-video").forEach((video) => {
         if (video.parentElement !== arModal) {
@@ -1037,7 +1058,6 @@
         arCameraErrorHandler = null;
       }
 
-      // AR.js のカメラ映像ストリームを明示的に停止する。
       document.querySelectorAll(".arjs-video, #arContainer video").forEach((video) => {
         try { video.pause(); } catch (e) {}
         try {
@@ -1051,7 +1071,6 @@
 
       const scene = arContainer.querySelector("a-scene");
       if (scene) {
-        try { if (scene.systems && scene.systems.arjs) scene.systems.arjs.pause(); } catch (e) {}
         try { if (scene.renderer) scene.renderer.dispose(); } catch (e) {}
         try { if (scene.pause) scene.pause(); } catch (e) {}
       }
@@ -1075,8 +1094,6 @@
         return;
       }
 
-      // ボタン操作の直後にカメラ権限を明示的に確認する。
-      // 拒否済み・OS側でブロックされている場合は、黒画面のまま待たせず原因を表示する。
       appMain.classList.add("hidden");
       arModal.classList.add("open");
       setARStatus("カメラの許可を確認しています…");
@@ -1100,16 +1117,19 @@
         arStarting = false;
         return;
       } finally {
-        // 権限確認用のストリームはAR.jsがカメラを起動する前に閉じる。
         if (permissionTestStream) {
           permissionTestStream.getTracks().forEach(track => track.stop());
         }
       }
-      // AR.js のイベント監視を先に登録し、初期化直後のイベント取りこぼしを防ぐ。
+
+      // 現在近くにある（あるいは選択されている）ドラゴンボールの画像ファイル名を取得する
+      const currentBall = config.balls.find(b => b.id === selectedBall) || config.balls[0];
+      const ballImageSrc = currentBall.image || "dragonball.png";
+
       arCameraInitHandler = () => {
         adoptARVideo();
         arCameraReady = true;
-        setARStatus("カメラ起動済みです。白黒のHiroマーカーを画面に映してください。");
+        setARStatus("カメラ起動済みです。ターゲットマーカーを画面に映してください。");
         if (arStartTimeout) {
           clearTimeout(arStartTimeout);
           arStartTimeout = null;
@@ -1118,49 +1138,54 @@
       arCameraErrorHandler = (event) => {
         const detail = event && event.detail;
         const reason = detail && (detail.error || detail.message);
-        setARStatus("AR.jsがカメラ映像を開始できませんでした。Chromeのサイト設定でカメラを許可し、他のカメラアプリを閉じてから再試行してください。" + (reason ? " 詳細: " + String(reason) : ""), true);
+        setARStatus("AR.jsがカメラ映像を開始できませんでした。" + (reason ? " 詳細: " + String(reason) : ""), true);
       };
       window.addEventListener("camera-init", arCameraInitHandler);
       window.addEventListener("camera-error", arCameraErrorHandler);
 
-      // video 要素が遅れて追加される端末にも対応する。
       arVideoObserver = new MutationObserver(() => adoptARVideo());
       arVideoObserver.observe(document.body, { childList: true, subtree: true });
 
       arContainer.innerHTML = `
         <a-scene
+          mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;"
           embedded
+          color-space="sRGB"
+          renderer="colorManagement: true, physicallyCorrectLights"
           vr-mode-ui="enabled: false"
-          renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true"
-          arjs="sourceType: webcam; debugUIEnabled: false;"
+          device-orientation-permission-ui="enabled: false"
           style="width:100%;height:100%;">
-          <a-marker preset="hiro" smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
-            <a-entity position="0 0.5 0">
-              <a-sphere radius="0.4" material="color: #ff8c00; roughness: 0.1; metalness: 0.1; opacity: 0.9; transparent: true;"></a-sphere>
-              <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear;">
-                <a-box width="0.12" height="0.12" depth="0.02" color="#ff1a1a" position="0 0 0"></a-box>
-              </a-entity>
-              <a-ring radius-inner="0.45" radius-outer="0.55" rotation="-90 0 0" material="color: #ffe65b; opacity: 0.7; transparent: true;"></a-ring>
-            </a-entity>
-          </a-marker>
-          <a-entity camera></a-entity>
+          
+          <a-assets>
+            <img id="dball" src="${ballImageSrc}" crossorigin="anonymous">
+          </a-assets>
+
+          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+          <a-entity mindar-image-target="targetIndex: 0">
+            <a-image
+              src="#dball"
+              position="0 0 0.1"
+              width="1"
+              height="1"
+              material="transparent: true; alphaTest: 0.1; shader: flat; side: double">
+            </a-image>
+          </a-entity>
         </a-scene>`;
 
-      // AR.js が video を作るタイミングに備え、初期化直後にも確認する。
       requestAnimationFrame(() => adoptARVideo());
       setTimeout(adoptARVideo, 300);
       setTimeout(adoptARVideo, 1000);
 
       arStartTimeout = setTimeout(() => {
         if (!arCameraReady) {
-          setARStatus("カメラの起動に時間がかかっています。カメラ許可・HTTPS・他アプリでカメラを使用中でないか確認してください。", true);
+          setARStatus("カメラの起動に時間がかかっています。許可や接続状態を確認してください。", true);
         }
       }, 12000);
     }
 
     qrScanBtn.addEventListener("click", startAR);
 
-    // ARを閉じる時はカメラのトラックも明示的に停止し、元のレーダー画面へ戻る。
     arCloseBtn.addEventListener("click", () => {
       arModal.classList.remove("open");
       cleanupAR();
@@ -1189,10 +1214,31 @@
     function renderDevCoords(){
       const el = document.getElementById("devCoords");
       el.textContent = config.balls.map(b => {
-        const n = b.id + "つ星";
+        const n = b.id + "つ星 (" + b.image + ")";
         return b.lat == null ? n + " : 未設定" : n + " : " + b.lat.toFixed(6) + ", " + b.lng.toFixed(6);
       }).join("\n");
     }
+
+    // 選択されたボールの画像設定用フォームを更新する
+    function renderSelectedBallConfig() {
+      const box = document.getElementById("selectedBallConfig");
+      const ball = config.balls.find(b => b.id === selectedBall);
+      if(!ball) return;
+      box.innerHTML = `
+        <div style="font-size:13px; font-weight:700; margin-bottom:6px; color:#ffe500;">
+          ${ball.id}つ星 の設定
+        </div>
+        <label style="font-size:12px;">画像ファイル名: 
+          <input type="text" id="ballImageInput" value="${ball.image || ''}" placeholder="ball_1.png" style="width:180px;">
+        </label>
+      `;
+      const input = document.getElementById("ballImageInput");
+      input.oninput = (e) => {
+        ball.image = e.target.value;
+        renderDevCoords();
+      };
+    }
+
     function syncBallBtns(){
       document.querySelectorAll(".ball-btn").forEach(btnEl => {
         const id = Number(btnEl.dataset.id);
@@ -1200,7 +1246,9 @@
         btnEl.classList.toggle("active", id === selectedBall);
         btnEl.classList.toggle("empty", !(ball && ball.lat != null));
       });
+      renderSelectedBallConfig();
     }
+
     function upsertMarker(ball){
       if(!map || ball.lat == null) return;
       if(markers[ball.id]){
@@ -1208,7 +1256,7 @@
         return;
       }
       markers[ball.id] = L.marker([ball.lat, ball.lng], {title: ball.id + "つ星"}).addTo(map)
-        .bindPopup(ball.id + "つ星");
+        .bindPopup(ball.id + "つ星 (" + ball.image + ")");
     }
 
     function initDev(){
@@ -1287,7 +1335,7 @@
         config.rangeMeters = Number(rangeInput.value) || 500;
         localStorage.setItem(STORAGE_KEY, configJSON());
         placeBallsOnRadar();
-        alert("This device has been saved.");
+        alert("設定をこの端末に保存しました。");
       };
       document.getElementById("copyBtn").onclick = async () => {
         config.rangeMeters = Number(rangeInput.value) || 500;
