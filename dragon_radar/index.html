@@ -99,6 +99,11 @@
     .logo-en .word span:nth-child(6){z-index:1;}
     .logo-en .blue span{color:#1aa3e8;}
     .logo-en .red span{color:#ff1a1a;}
+    /* RADAR部分を指し示しやすく、クリック可能にする設定 */
+    .logo-en .word.red {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
 
     .logo-ja{
       display:flex;
@@ -295,8 +300,8 @@
     }
 
     .gps-status{
-      margin-top:18px;
-      min-height:1.5em;
+      margin-top:14px;
+      min-height:1.4em;
       max-width:92vw;
       text-align:center;
       font-family:"Noto Sans JP",sans-serif;
@@ -311,23 +316,37 @@
     .gps-status.ng{color:#ff8b82;}
     .gps-status.wait{color:#ffe65b;}
 
-    .dev-open{
-      display:block;
-      position:fixed;
-      right:12px;
-      bottom:12px;
-      z-index:20;
-      border:0;
-      border-radius:999px;
-      padding:10px 14px;
-      background:#111;
-      color:#ffe65b;
-      font-family:"Noto Sans JP",sans-serif;
-      font-size:12px;
-      font-weight:700;
-      letter-spacing:.08em;
-      box-shadow:0 0 0 2px #ffe65b;
-      cursor:pointer;
+    /* 取得済みボール一覧（コレクションUI）のスタイル */
+    .collection-bar {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .col-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(26px, 7vw, 36px);
+      height: clamp(26px, 7vw, 36px);
+      background: #222;
+      border: 2px solid #444;
+      border-radius: 50%;
+      font-family: "Noto Sans JP", sans-serif;
+      font-size: clamp(12px, 3.5vw, 15px);
+      font-weight: 700;
+      color: #555;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+      transition: all 0.3s ease;
+    }
+    .col-badge.collected {
+      background: #ffe500;
+      border: 2px solid #000;
+      color: #000;
+      box-shadow: 0 0 8px rgba(255, 230, 91, 0.8), 0 2px 0 rgba(0,0,0,.5);
+      transform: scale(1.05);
     }
 
     .dev-panel{
@@ -419,7 +438,6 @@
       color:#9f9;
     }
 
-    /* 開発者設定内の個別画像設定用入力欄 */
     .ball-setting-box {
       background: #1a1a1a;
       border: 1px solid #333;
@@ -436,10 +454,9 @@
       margin-left: 6px;
     }
 
-    /* QRコード読み取りボタン */
     .qr-scan-btn {
       display: none;
-      margin-top: 12px;
+      margin-top: 10px;
       width: min(92vw, 400px);
       padding: 14px 20px;
       background: linear-gradient(135deg, #0fa355, #12ba62);
@@ -459,7 +476,7 @@
       display: block;
     }
 
-    /* ARカメラ：全画面表示 */
+    /* ARカメラモーダル＆ポップアップUI */
     .ar-modal {
       display: none;
       position: fixed;
@@ -498,7 +515,7 @@
       height: 100vh !important;
       height: 100dvh !important;
       z-index: 2 !important;
-      pointer-events: none !important;
+      pointer-events: auto !important;
     }
     .ar-modal .arjs-video {
       position: absolute !important;
@@ -545,6 +562,102 @@
       touch-action: manipulation;
     }
 
+    /* GET!!ポップアップUI */
+    #get-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.3);
+      background: linear-gradient(135deg, #ffaa00 0%, #ff3300 100%);
+      color: #ffffff;
+      padding: 24px 48px;
+      border-radius: 28px;
+      border: 4px solid #fffb00;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.65), 0 0 35px rgba(255, 204, 0, 0.9);
+      font-size: 36px;
+      font-weight: 900;
+      text-align: center;
+      text-shadow: 2px 3px 6px rgba(0,0,0,0.7);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 20000;
+      pointer-events: auto;
+      width: min(85vw, 360px);
+      cursor: pointer;
+    }
+    #get-toast.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .toast-title {
+      font-size: 28px;
+      color: #fffb00;
+      text-shadow: 1px 2px 4px rgba(0,0,0,0.8);
+      margin-bottom: 6px;
+    }
+    .toast-main {
+      font-size: 46px;
+      letter-spacing: 2px;
+      color: #ffffff;
+      text-shadow: 2px 3px 6px rgba(0,0,0,0.8);
+    }
+
+    /* Complete!! クリア画面オーバーレイの追加スタイル */
+    .complete-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 30000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    .complete-overlay.show {
+      display: flex;
+      opacity: 1;
+    }
+    .complete-content {
+      position: relative;
+      text-align: center;
+      width: min(90vw, 500px);
+    }
+    .complete-shenron-img {
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 0 30px rgba(255, 230, 91, 0.6);
+    }
+    .complete-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: "Archivo Black", Impact, sans-serif;
+      font-size: clamp(36px, 10vw, 64px);
+      color: #ffe65b;
+      text-shadow: 
+        -2px 2px 0 #000,
+         2px 2px 0 #000,
+         2px -2px 0 #000,
+        -2px -2px 0 #000,
+        0 0 20px rgba(255, 100, 0, 0.8);
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    /* VR/ARデフォルトボタンの完全非表示 */
+    .a-enter-vr-button,
+    .a-enter-ar-button {
+      display: none !important;
+    }
+
     @media (max-height:700px){
       .logo{margin-bottom:2px;}
       .logo-ja{margin-top:2px;}
@@ -554,11 +667,25 @@
   </style>
 </head>
 <body>
+  <!-- GET!!ポップアップUI -->
+  <div id="get-toast">
+    <div id="toast-ball-name" class="toast-title">一星球</div>
+    <div class="toast-main">GET!!</div>
+  </div>
+
+  <!-- Complete!! クリア画面オーバーレイ -->
+  <div class="complete-overlay" id="completeOverlay">
+    <div class="complete-content">
+      <img src="shenron.png" alt="神龍" class="complete-shenron-img">
+      <div class="complete-text">Complete!!</div>
+    </div>
+  </div>
+
   <div class="app" id="appMain">
     <div class="logo">
       <div class="logo-en">
         <span class="word blue"><span>D</span><span>R</span><span>A</span><span>G</span><span>O</span><span>N</span></span>
-        <span class="word red"><span>R</span><span>A</span><span>D</span><span>A</span><span>R</span></span>
+        <span class="word red" id="radarLogo"><span>R</span><span>A</span><span>D</span><span>A</span><span>R</span></span>
       </div>
       <div class="logo-ja">
         <span class="circle">ド</span>
@@ -591,10 +718,19 @@
       </div>
     </div>
     <div class="gps-status" id="gpsStatus"></div>
+    <!-- コレクションUI (1〜7のインジケーター) -->
+    <div class="collection-bar" id="collectionBar">
+      <div class="col-badge" data-col="1">①</div>
+      <div class="col-badge" data-col="2">②</div>
+      <div class="col-badge" data-col="3">③</div>
+      <div class="col-badge" data-col="4">④</div>
+      <div class="col-badge" data-col="5">⑤</div>
+      <div class="col-badge" data-col="6">⑥</div>
+      <div class="col-badge" data-col="7">⑦</div>
+    </div>
     <button class="qr-scan-btn" id="qrScanBtn" type="button">カメラでドラゴンボールをのぞく</button>
   </div>
 
-  <button class="dev-open" id="devOpen" type="button">開発者設定</button>
   <div class="dev-panel" id="devPanel">
     <div class="dev-head">
       <h2>BALL LOCATIONS & IMAGES</h2>
@@ -602,9 +738,7 @@
     </div>
     <p class="dev-note">星の番号を選んでから地図をタップすると位置が設定されます。それぞれのドラゴンボール画像ファイル名も個別に指定できます。</p>
     <div class="dev-row" id="ballBtns"></div>
-    <div class="ball-setting-box" id="selectedBallConfig">
-      <!-- 選択中のボールの画像設定エリア -->
-    </div>
+    <div class="ball-setting-box" id="selectedBallConfig"></div>
     <div id="devMap"></div>
     <div class="dev-row">
       <label>レーダー範囲
@@ -627,7 +761,7 @@
     <button class="ar-close-btn" id="arCloseBtn" type="button">閉じる</button>
   </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STORAGE_KEY = "dragonRadarConfig";
     const isSecure = window.isSecureContext === true;
@@ -649,10 +783,17 @@
     let arCameraErrorHandler = null;
     let arVideoObserver = null;
 
-    // 1〜7個すべてのボールにデフォルトの画像名（ball_1.png 〜 ball_7.png）を持たせる
     const defaultConfig = () => ({
       rangeMeters: 500,
-      balls: [1,2,3,4,5,6,7].map(id => ({id, lat: null, lng: null, image: `ball_${id}.png`}))
+      balls: [
+        {id: 1, lat: null, lng: null, image: "dragonball1.png", name: "一星球", collected: false},
+        {id: 2, lat: null, lng: null, image: "dragonball2.png", name: "二星球", collected: false},
+        {id: 3, lat: null, lng: null, image: "dragonball3.png", name: "三星球", collected: false},
+        {id: 4, lat: null, lng: null, image: "dragonball4.png", name: "四星球", collected: false},
+        {id: 5, lat: null, lng: null, image: "dragonball5.png", name: "五星球", collected: false},
+        {id: 6, lat: null, lng: null, image: "dragonball6.png", name: "六星球", collected: false},
+        {id: 7, lat: null, lng: null, image: "dragonball7.png", name: "七星球", collected: false}
+      ]
     });
     let config = defaultConfig();
     let userPos = null;
@@ -669,6 +810,20 @@
     let fastBlinkTimer = null;
     let normalBlinkState = true;
     let fastBlinkState = true;
+
+    // コレクションUI（画面下の①〜⑦）の表示を更新
+    function updateCollectionUI() {
+      config.balls.forEach(ball => {
+        const badge = document.querySelector(`.col-badge[data-col="${ball.id}"]`);
+        if(badge) {
+          if(ball.collected) {
+            badge.classList.add("collected");
+          } else {
+            badge.classList.remove("collected");
+          }
+        }
+      });
+    }
 
     function startBlinkTimers(){
       if(!normalBlinkTimer){
@@ -751,7 +906,8 @@
       let minDst = Infinity;
 
       config.balls.forEach((ball, i) => {
-        if(ball.lat == null || ball.lng == null) return;
+        // 既に取得済み、または位置未設定のボールはレーダーに表示しない
+        if(ball.collected || ball.lat == null || ball.lng == null) return;
         const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
         if(dist <= range){
           if(dist < minDst){
@@ -766,7 +922,7 @@
       config.balls.forEach((ball, i) => {
         const dot = dots[i];
         if(!dot) return;
-        if(ball.lat == null || ball.lng == null){
+        if(ball.collected || ball.lat == null || ball.lng == null){
           dot.classList.remove("show", "fast-blink", "blink-off");
           return;
         }
@@ -828,16 +984,20 @@
       }catch(e){}
       if(loaded && Array.isArray(loaded.balls)){
         config.rangeMeters = Number(loaded.rangeMeters) || 500;
-        config.balls = [1,2,3,4,5,6,7].map(id => {
-          const found = loaded.balls.find(b => Number(b.id) === id) || {};
+        const def = defaultConfig();
+        config.balls = def.balls.map(dBall => {
+          const found = loaded.balls.find(b => Number(b.id) === dBall.id) || {};
           return {
-            id,
+            id: dBall.id,
             lat: found.lat ?? null,
             lng: found.lng ?? null,
-            image: found.image || `ball_${id}.png`
+            image: found.image || dBall.image,
+            name: found.name || dBall.name,
+            collected: Boolean(found.collected)
           };
         });
       }
+      updateCollectionUI();
     }
 
     function ensureAudio(){
@@ -890,23 +1050,119 @@
     function playRadarBeep() {
       const ctx = ensureAudio();
       if (!ctx) return;
-      
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      
       osc.type = "square";
       osc.frequency.setValueAtTime(2200, t);
-      
       gain.gain.setValueAtTime(0.15, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-      
       osc.connect(gain);
       gain.connect(ctx.destination);
-      
       osc.start(t);
       osc.stop(t + 0.05);
     }
+
+    function playGetSound() {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.07);
+        osc.frequency.setValueAtTime(783.99, now + 0.14);
+        osc.frequency.setValueAtTime(1046.50, now + 0.21);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      } catch (e) {}
+    }
+
+    let toastTimeout = null;
+    function showGetEffect(ballId, ballName, visualEl) {
+      const toast = document.getElementById('get-toast');
+      const nameEl = document.getElementById('toast-ball-name');
+      nameEl.textContent = ballName;
+      toast.classList.add('show');
+      playGetSound();
+      if (navigator.vibrate) {
+        try { navigator.vibrate([80, 40, 80]); } catch(e) {}
+      }
+      if (visualEl) {
+        visualEl.setAttribute('animation__pop', {
+          property: 'scale',
+          from: '1.4 1.4 1.4',
+          to: '1.0 1.0 1.0',
+          dur: 350,
+          easing: 'easeOutBack'
+        });
+      }
+
+      // ボールをゲット済みに更新して保存
+      const targetBall = config.balls.find(b => b.id === ballId);
+      if(targetBall) {
+        targetBall.collected = true;
+        localStorage.setItem(STORAGE_KEY, configJSON());
+        updateCollectionUI();
+      }
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      
+      // 3秒後に自動でARカメラを閉じ、メイン画面に戻る（またはコンプリートなら神龍画面へ）
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+        closeARView();
+      }, 3000);
+    }
+
+    function closeARView() {
+      arModal.classList.remove("open");
+      cleanupAR();
+      arStatus.classList.remove("error");
+      arStatus.textContent = "カメラを準備しています…";
+      arStatus.style.display = "block";
+      
+      // すべて揃っている（7個すべてcollectedがtrue）かチェック
+      const isComplete = config.balls.every(b => b.collected);
+      if (isComplete) {
+        appMain.classList.add("hidden");
+        const completeOverlay = document.getElementById("completeOverlay");
+        if (completeOverlay) {
+          completeOverlay.classList.add("show");
+        }
+      } else {
+        appMain.classList.remove("hidden");
+        placeBallsOnRadar();
+      }
+    }
+
+    // クリック・タップ可能なARコンポーネントの登録
+    AFRAME.registerComponent('dragonball-clickable', {
+      schema: { 
+        id: { type: 'number', default: 1 },
+        name: { type: 'string', default: 'ドラゴンボール' } 
+      },
+      init: function () {
+        const el = this.el;
+        const ballId = this.data.id;
+        const ballName = this.data.name;
+        this.triggerGet = () => {
+          const visualBall = el.querySelector('.visual-ball');
+          showGetEffect(ballId, ballName, visualBall || el);
+        };
+        this.el.addEventListener('click', () => { this.triggerGet(); });
+        this.el.addEventListener('touchstart', (evt) => {
+          evt.preventDefault();
+          this.triggerGet();
+        }, { passive: false });
+      }
+    });
 
     function showBallsLater(){
       if(ballsShown || ballsTimer) return;
@@ -936,7 +1192,6 @@
 
     function scanHeading(){
       setGpsStatus("方位をスキャンしています…", "wait");
-
       const executeScan = () => {
         const tempListener = (event) => {
           if(event.alpha != null){
@@ -947,9 +1202,7 @@
             window.removeEventListener('deviceorientation', tempListener);
           }
         };
-
         window.addEventListener('deviceorientation', tempListener);
-
         setTimeout(() => {
           window.removeEventListener('deviceorientation', tempListener);
           if(latestAlpha != null){
@@ -966,7 +1219,6 @@
         executeScan();
         return;
       }
-
       DeviceOrientationEvent.requestPermission()
         .then(response => {
           if (response === 'granted') {
@@ -976,15 +1228,12 @@
             setGpsStatus("方位センサーの許可が拒否されました", "ng");
           }
         })
-        .catch(() => {
-          executeScan();
-        });
+        .catch(() => { executeScan(); });
     }
 
     function handleScanButton(){
       if(busy) return;
       busy = true;
-
       unlockAudioContext();
       playPochitt();
 
@@ -1097,6 +1346,7 @@
       appMain.classList.add("hidden");
       arModal.classList.add("open");
       setARStatus("カメラの許可を確認しています…");
+      
       let permissionTestStream = null;
       try {
         permissionTestStream = await navigator.mediaDevices.getUserMedia({
@@ -1105,13 +1355,9 @@
         });
       } catch (error) {
         const name = error && error.name ? error.name : "";
-        let message = "カメラを利用できません。スマホの設定で、このサイトのカメラ使用を許可してから再読み込みしてください。";
+        let message = "カメラを利用できません。スマホの設定でこのサイトのカメラ使用を許可してください。";
         if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
-          message = "カメラの許可が拒否されているか、ブロックされています。Chromeのサイト設定で「カメラ」を「許可」に変更し、ページを再読み込みしてください。";
-        } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-          message = "利用できるカメラが見つかりません。スマホのカメラが使用できるか確認してください。";
-        } else if (name === "NotReadableError" || name === "TrackStartError") {
-          message = "カメラを起動できません。他のアプリがカメラを使用していないか確認し、閉じてから再試行してください。";
+          message = "カメラの許可が拒否されています。サイト設定でカメラを「許可」に変更してください。";
         }
         setARStatus(message, true);
         arStarting = false;
@@ -1134,7 +1380,7 @@
       arCameraErrorHandler = (event) => {
         const detail = event && event.detail;
         const reason = detail && (detail.error || detail.message);
-        setARStatus("AR.jsがカメラ映像を開始できませんでした。" + (reason ? " 詳細: " + String(reason) : ""), true);
+        setARStatus("ARがカメラ映像を開始できませんでした。" + (reason ? " 詳細: " + String(reason) : ""), true);
       };
       window.addEventListener("camera-init", arCameraInitHandler);
       window.addEventListener("camera-error", arCameraErrorHandler);
@@ -1142,39 +1388,50 @@
       arVideoObserver = new MutationObserver(() => adoptARVideo());
       arVideoObserver.observe(document.body, { childList: true, subtree: true });
 
-      // 7つのボール画像アセットを生成
-      const assetsHTML = config.balls.map(b => 
-        `<img id="dball_${b.id}" src="${b.image || `ball_${b.id}.png`}" crossorigin="anonymous">`
-      ).join("\n");
-
-      // 7つのターゲット（targetIndex: 0 〜 6）に対応するARエンティティを生成
-      const targetsHTML = config.balls.map((b, index) => `
+      // 未取得のボールのみ、またはすべてのターゲットに対応するARエンティティを生成
+      const targetsHTML = config.balls.map((b, index) => {
+        // すでに取得済みの場合はAR上で非表示、またはインタラクション無効化も可能ですがそのまま描画します
+        if (b.collected) return '';
+        return `
         <a-entity mindar-image-target="targetIndex: ${index}">
-          <a-image
-            src="#dball_${b.id}"
-            position="0 0 0.1"
-            width="1"
-            height="1"
-            material="transparent: true; alphaTest: 0.1; shader: flat; side: double">
-          </a-image>
+          <a-plane 
+            class="raycastable"
+            dragonball-clickable="id: ${b.id}; name: ${b.name || (b.id + '星球')}"
+            position="0 0 0.08" 
+            height="3.2" 
+            width="3.2" 
+            material="transparent: true; opacity: 0.001;"
+            animation="property: position; to: 0 0 0.22; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine">
+            <a-plane 
+              class="visual-ball"
+              src="${b.image || ('dragonball' + b.id + '.png')}" 
+              position="0 0 0.01" 
+              height="2.5" 
+              width="2.5" 
+              material="transparent: true; alphaTest: 0.5;">
+            </a-plane>
+          </a-plane>
         </a-entity>
-      `).join("\n");
+      `;
+      }).join("\n");
 
       arContainer.innerHTML = `
         <a-scene
-          mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 7;"
+          mindar-image="imageTargetSrc: ./targets.mind;"
           embedded
-          color-space="sRGB"
-          renderer="colorManagement: true, physicallyCorrectLights"
-          vr-mode-ui="enabled: false"
+          color-space="sRGB" 
+          renderer="colorManagement: true, physicallyCorrectLights" 
+          vr-mode-ui="enabled: false" 
           device-orientation-permission-ui="enabled: false"
+          raycaster="objects: .raycastable"
           style="width:100%;height:100%;">
-          
-          <a-assets>
-            ${assetsHTML}
-          </a-assets>
 
-          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+          <a-camera 
+            position="0 0 0" 
+            look-controls="enabled: false" 
+            raycaster="objects: .raycastable; far: 1000;" 
+            cursor="fuse: false; rayOrigin: mouse">
+          </a-camera>
 
           ${targetsHTML}
         </a-scene>`;
@@ -1185,7 +1442,7 @@
 
       arStartTimeout = setTimeout(() => {
         if (!arCameraReady) {
-          setARStatus("カメラの起動に時間がかかっています。許可や接続状態を確認してください。", true);
+          setARStatus("カメラの起動に時間がかかっています。接続状態を確認してください。", true);
         }
       }, 12000);
     }
@@ -1193,12 +1450,42 @@
     qrScanBtn.addEventListener("click", startAR);
 
     arCloseBtn.addEventListener("click", () => {
-      arModal.classList.remove("open");
-      cleanupAR();
-      arStatus.classList.remove("error");
-      arStatus.textContent = "カメラを準備しています…";
-      arStatus.style.display = "block";
-      appMain.classList.remove("hidden");
+      closeARView();
+    });
+
+    // 画面タップ・クリックのダイレクトフォールバック (スマホ対応)
+    window.addEventListener('touchend', (e) => {
+      const scene = arContainer.querySelector('a-scene');
+      if (!arModal.classList.contains('open') || !scene || !scene.camera) return;
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const camera = scene.camera;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const clickableEls = document.querySelectorAll('.raycastable');
+        const objectsToTest = [];
+        clickableEls.forEach(el => { if (el.object3D) objectsToTest.push(el.object3D); });
+        const intersects = raycaster.intersectObjects(objectsToTest, true);
+        if (intersects.length > 0) {
+          let hitObj = intersects[0].object;
+          while (hitObj) {
+            if (hitObj.el && hitObj.el.components && hitObj.el.components['dragonball-clickable']) {
+              hitObj.el.components['dragonball-clickable'].triggerGet();
+              break;
+            }
+            hitObj = hitObj.parent;
+          }
+        }
+      }
+    }, { passive: true });
+
+    document.getElementById('get-toast').addEventListener('click', function() {
+      this.classList.remove('show');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      closeARView();
     });
 
     function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
@@ -1220,28 +1507,42 @@
     function renderDevCoords(){
       const el = document.getElementById("devCoords");
       el.textContent = config.balls.map(b => {
-        const n = b.id + "つ星 (" + b.image + ")";
+        const status = b.collected ? " [GET済]" : "";
+        const n = b.id + "つ星 (" + b.image + ")" + status;
         return b.lat == null ? n + " : 未設定" : n + " : " + b.lat.toFixed(6) + ", " + b.lng.toFixed(6);
       }).join("\n");
     }
 
-    // 選択されたボールの画像設定用フォームを更新する
     function renderSelectedBallConfig() {
       const box = document.getElementById("selectedBallConfig");
       const ball = config.balls.find(b => b.id === selectedBall);
       if(!ball) return;
       box.innerHTML = `
         <div style="font-size:13px; font-weight:700; margin-bottom:6px; color:#ffe500;">
-          ${ball.id}つ星 の設定
+          ${ball.id}つ星 の設定 ${ball.collected ? '(取得済み)' : ''}
         </div>
-        <label style="font-size:12px;">画像ファイル名: 
-          <input type="text" id="ballImageInput" value="${ball.image || ''}" placeholder="ball_1.png" style="width:180px;">
-        </label>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:12px;">画像: 
+            <input type="text" id="ballImageInput" value="${ball.image || ''}" placeholder="dragonball1.png" style="width:140px;">
+          </label>
+          <button type="button" id="toggleCollectBtn" style="background:${ball.collected ? '#ff4b3f' : '#0fa355'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">
+            ${ball.collected ? '未取得に戻す' : '強制GET済みにする'}
+          </button>
+        </div>
       `;
       const input = document.getElementById("ballImageInput");
       input.oninput = (e) => {
         ball.image = e.target.value;
         renderDevCoords();
+      };
+      const toggleBtn = document.getElementById("toggleCollectBtn");
+      toggleBtn.onclick = () => {
+        ball.collected = !ball.collected;
+        localStorage.setItem(STORAGE_KEY, configJSON());
+        updateCollectionUI();
+        syncBallBtns();
+        renderDevCoords();
+        placeBallsOnRadar();
       };
     }
 
@@ -1251,12 +1552,25 @@
         const ball = config.balls.find(b => b.id === id);
         btnEl.classList.toggle("active", id === selectedBall);
         btnEl.classList.toggle("empty", !(ball && ball.lat != null));
+        if (ball && ball.collected) {
+          btnEl.style.border = "2px solid #7dff9a";
+        } else {
+          btnEl.style.border = "2px solid #000";
+        }
       });
       renderSelectedBallConfig();
     }
 
     function upsertMarker(ball){
       if(!map || ball.lat == null) return;
+      // 取得済みの場合はマップ上のマーカーを削除
+      if(ball.collected) {
+        if(markers[ball.id]) {
+          map.removeLayer(markers[ball.id]);
+          delete markers[ball.id];
+        }
+        return;
+      }
       if(markers[ball.id]){
         markers[ball.id].setLatLng([ball.lat, ball.lng]);
         return;
@@ -1299,18 +1613,6 @@
 
       config.balls.forEach(upsertMarker);
 
-      document.getElementById("devOpen").onclick = () => {
-        panel.classList.add("open");
-        setTimeout(() => { 
-          if(map) {
-            map.invalidateSize(); 
-            if(userPos){
-              map.setView([userPos.lat, userPos.lng], 16);
-              updateUserMarker(userPos.lat, userPos.lng);
-            }
-          }
-        }, 200);
-      };
       document.getElementById("devClose").onclick = () => panel.classList.remove("open");
 
       document.getElementById("gpsBtn").onclick = () => {
@@ -1326,9 +1628,7 @@
             if(map) map.setView([lat, lng], 16);
             alert("現在地を取得しました。");
           },
-          (err) => {
-            alert(geoErrorMessage(err));
-          },
+          (err) => { alert(geoErrorMessage(err)); },
           {timeout:15000, enableHighAccuracy:false}
         );
       };
@@ -1354,7 +1654,7 @@
         }
       };
       document.getElementById("clearBtn").onclick = () => {
-        if(!confirm("7個すべての位置を消しますか？")) return;
+        if(!confirm("7個すべての位置や取得状況をリセットしますか？")) return;
         config = defaultConfig();
         config.rangeMeters = Number(rangeInput.value) || 500;
         Object.values(markers).forEach(m => map.removeLayer(m));
@@ -1362,6 +1662,7 @@
         localStorage.removeItem(STORAGE_KEY);
         syncBallBtns();
         renderDevCoords();
+        updateCollectionUI();
         placeBallsOnRadar();
       };
 
@@ -1384,6 +1685,39 @@
           if(map) map.setView([lat, lng], 16);
         }, () => {}, {timeout:8000, enableHighAccuracy:false});
       }
+    }
+
+    // RADARロゴ（5回連続タップで開発者パネルを開く隠しコマンド）
+    let radarClickCount = 0;
+    let radarClickTimer = null;
+    const radarLogoEl = document.getElementById("radarLogo");
+    if(radarLogoEl) {
+      radarLogoEl.addEventListener("click", () => {
+        const now = Date.now();
+        // 前回のタップから3秒以上空いた場合はカウントをリセット
+        if (radarClickTimer && (now - radarClickTimer > 3000)) {
+          radarClickCount = 0;
+        }
+        radarClickCount++;
+        radarClickTimer = now;
+
+        if (radarClickCount >= 5) {
+          radarClickCount = 0;
+          const panel = document.getElementById("devPanel");
+          if (panel) {
+            panel.classList.add("open");
+            setTimeout(() => { 
+              if(map) {
+                map.invalidateSize(); 
+                if(userPos){
+                  map.setView([userPos.lat, userPos.lng], 16);
+                  updateUserMarker(userPos.lat, userPos.lng);
+                }
+              }
+            }, 200);
+          }
+        }
+      });
     }
 
     loadConfig().then(() => {
