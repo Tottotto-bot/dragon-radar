@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#050505" />
+  <title>ドラゴンレーダー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Noto+Sans+JP:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- A-Frame & MindAR の読み込み -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    :root{
+      --bg:#050505;
+      --shell:#eceff2;
+      --shell-light:#fbfcfd;
+      --shell-dark:#b8bec7;
+      --grid:#0f5a2f;
+      --red:#ff4b3f;
+      --yellow:#ffe65b;
+      --text:#f3f3f3;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      width:100%;
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      overflow:hidden;
+      font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;
+    }
+    .app{
+      width:100%;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:flex-start;
+      padding:10px 12px 16px;
+      color:var(--text);
+    }
+    .app.hidden {
+      display: none !important;
+    }
+
+    .logo{
+      width:100%;
+      text-align:center;
+      line-height:1;
+      margin:0 0 16px;
+      user-select:none;
+      flex:0 0 auto;
+    }
+    .logo-en{
+      display:flex;
+      justify-content:center;
+      align-items:flex-end;
+      gap:.01em;
+      font-family:"Archivo Black", Impact, "Arial Black", sans-serif;
+      font-size:clamp(50px, 18vw, 110px);
+      font-weight:400;
+      line-height:1;
+      white-space:nowrap;
+    }
+    .logo-en .word{display:flex;}
+    .logo-en .word span{
+      display:block;
+      position:relative;
+      margin-right:-.41em;
+      transform:scaleX(.62) scaleY(1.22);
+      transform-origin:center bottom;
+      -webkit-text-stroke:2px #000;
+      paint-order:stroke fill;
+      text-shadow:
+        -1px 1px 0 #000,
+        -2px 2px 0 #000,
+        -3px 3px 0 #000,
+        -4px 4px 0 #000,
+        -5px 5px 0 #000,
+        -6px 6px 0 #000,
+        -7px 7px 0 #000,
+        -8px 8px 0 #000,
+        -9px 9px 0 #000;
+    }
+    .logo-en .word span:last-child{margin-right:0;}
+    .logo-en .word span:nth-child(1){z-index:6;}
+    .logo-en .word span:nth-child(2){z-index:5;}
+    .logo-en .word span:nth-child(3){z-index:4;}
+    .logo-en .word span:nth-child(4){z-index:3;}
+    .logo-en .word span:nth-child(5){z-index:2;}
+    .logo-en .word span:nth-child(6){z-index:1;}
+    .logo-en .blue span{color:#1aa3e8;}
+    .logo-en .red span{color:#ff1a1a;}
+    /* RADAR部分を指し示しやすく、クリック可能にする設定 */
+    .logo-en .word.red {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .logo-ja{
+      display:flex;
+      gap:4px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:14px;
+      background:none;
+      border-radius:0;
+      box-shadow:none;
+      padding:0;
+      text-shadow:none;
+    }
+    .logo-ja .circle{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:clamp(30px, 8.5vw, 52px);
+      height:clamp(30px, 8.5vw, 52px);
+      background:#ffe500;
+      border-radius:50%;
+      font-family:"Noto Sans JP",sans-serif;
+      font-size:clamp(16px, 4.6vw, 27px);
+      font-weight:500;
+      color:#000;
+      line-height:1;
+      box-shadow:
+        0 0 0 2px #000,
+        0 2px 0 rgba(0,0,0,.5);
+    }
+
+    .radar-shell{
+      width:min(99vw, 650px, calc(100dvh - 140px));
+      aspect-ratio:992 / 1149;
+      position:relative;
+      margin-top:24px;
+      padding:0;
+      flex:0 1 auto;
+      background-image:url("dragon_radar_device.png");
+      background-size:100% 100%;
+      background-repeat:no-repeat;
+    }
+
+    .knob-art{
+      position:absolute;
+      left:37.0%; top:5.2%;
+      width:24.4%; height:auto; aspect-ratio:242 / 116;
+      background-image:url("dragon_radar_knob.png");
+      background-size:100% 100%;
+      background-repeat:no-repeat;
+      z-index:5;
+      pointer-events:none;
+      transform:translateY(0);
+      transition:transform 90ms ease, filter 90ms ease;
+    }
+    .radar-shell.knob-pressed .knob-art{
+      transform:translateY(5px);
+      filter:brightness(.9);
+    }
+
+    .top-knob{
+      display:block;
+      position:absolute;
+      left:37.0%; top:5.2%;
+      width:24.4%; height:11%;
+      transform:none;
+      padding:0;
+      margin:0;
+      border:0;
+      border-radius:18px;
+      background:transparent;
+      box-shadow:none;
+      z-index:7;
+      cursor:pointer;
+      touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    .screen-wrap{
+      position: absolute;
+      left: 13.5%;
+      top: 23.4%;
+      width: 73%;
+      aspect-ratio: 1 / 1;
+      height: auto;
+      padding: 0;
+      border-radius: 50%;
+      background: transparent;
+      overflow: hidden;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .screen{
+      width:100%;
+      height:100%;
+      border-radius:50%;
+      position:relative;
+      overflow:hidden;
+      background:transparent;
+      border:0;
+      box-shadow:none;
+    }
+
+    .scan{
+      position:absolute;
+      inset:0;
+      transform-origin:50% 50%;
+      animation:spin 4.8s linear infinite;
+      animation-play-state:paused;
+      overflow:hidden;
+      opacity:0;
+    }
+    .screen.on .scan{opacity:1;animation-play-state:running;}
+    .scan::before{
+      content:"";
+      position:absolute;
+      inset:-10%;
+      background:conic-gradient(
+        from 0deg,
+        transparent 0deg 265deg,
+        rgba(10,160,70,.18) 270deg,
+        rgba(12,170,74,.55) 285deg,
+        rgba(18,190,86,.92) 315deg,
+        rgba(12,170,74,.55) 345deg,
+        transparent 355deg 360deg
+      );
+      mix-blend-mode:screen;
+      opacity:.5;
+      filter:contrast(1.2) saturate(1.15);
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .center-glow,.center-dot{opacity:0;visibility:hidden;}
+    .screen.on .center-glow,.screen.on .center-dot{opacity:1;visibility:visible;}
+    .center-glow{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      width:78px;
+      height:78px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(255,75,63,.42) 0%, rgba(255,75,63,.18) 18%, rgba(255,75,63,0) 62%);
+      filter:blur(2px);
+    }
+    .center-dot{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      width:20px;
+      height:18px;
+      background:var(--red);
+      clip-path:polygon(50% 0%, 0% 100%, 100% 100%);
+      box-shadow:0 0 10px rgba(255,75,63,.9);
+      animation:pulse 1.8s ease-in-out infinite;
+      animation-play-state:paused;
+    }
+    .screen.on .center-dot{animation-play-state:running;}
+    @keyframes pulse{
+      0%,100%{transform:translate(-50%,-50%) scale(1); opacity:1}
+      50%{transform:translate(-50%,-50%) scale(1.08); opacity:.88}
+    }
+
+    .target-dot{
+      position:absolute;
+      width:14px;
+      height:14px;
+      margin-left:-7px;
+      margin-top:-7px;
+      border-radius:50%;
+      background:var(--yellow);
+      box-shadow:0 0 10px rgba(255,230,91,.9);
+      opacity:0;
+      visibility:hidden;
+      transition:left .6s ease, top .6s ease;
+    }
+    .screen.balls .target-dot.show{
+      visibility:visible;
+      opacity:1;
+      transform:scale(1);
+    }
+    .screen.balls .target-dot.show.blink-off{
+      opacity:.22;
+      transform:scale(.86);
+    }
+    .screen.balls .target-dot.show.fast-blink{
+      opacity:1;
+      transform:scale(1);
+    }
+    .screen.balls .target-dot.show.fast-blink.blink-off{
+      opacity:.22;
+      transform:scale(.86);
+    }
+
+    .gps-status{
+      margin-top:14px;
+      min-height:1.4em;
+      max-width:92vw;
+      text-align:center;
+      font-family:"Noto Sans JP",sans-serif;
+      font-size:13px;
+      font-weight:500;
+      letter-spacing:.06em;
+      color:rgba(243,243,243,.72);
+      line-height:1.5;
+      user-select:none;
+    }
+    .gps-status.ok{color:#7dff9a;}
+    .gps-status.ng{color:#ff8b82;}
+    .gps-status.wait{color:#ffe65b;}
+
+    /* 取得済みボール一覧（コレクションUI）のスタイル */
+    .collection-bar {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .col-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: clamp(26px, 7vw, 36px);
+      height: clamp(26px, 7vw, 36px);
+      background: #222;
+      border: 2px solid #444;
+      border-radius: 50%;
+      font-family: "Noto Sans JP", sans-serif;
+      font-size: clamp(12px, 3.5vw, 15px);
+      font-weight: 700;
+      color: #555;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+      transition: all 0.3s ease;
+    }
+    .col-badge.collected {
+      background: #ffe500;
+      border: 2px solid #000;
+      color: #000;
+      box-shadow: 0 0 8px rgba(255, 230, 91, 0.8), 0 2px 0 rgba(0,0,0,.5);
+      transform: scale(1.05);
+    }
+
+    .dev-panel{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:30;
+      background:rgba(0,0,0,.92);
+      color:#eee;
+      overflow:auto;
+      padding:12px;
+      font-family:"Noto Sans JP",sans-serif;
+    }
+    .dev-panel.open{display:block;}
+    .dev-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:10px;
+    }
+    .dev-head h2{
+      margin:0;
+      font-size:16px;
+      letter-spacing:.12em;
+    }
+    .dev-panel button,.dev-panel select,.dev-panel input{
+      font-family:inherit;
+    }
+    .dev-close{
+      border:0;
+      background:#333;
+      color:#fff;
+      border-radius:8px;
+      padding:8px 12px;
+      cursor:pointer;
+    }
+    #devMap{
+      width:100%;
+      height:min(48vh, 360px);
+      border-radius:12px;
+      overflow:hidden;
+      border:1px solid #333;
+      margin-top:8px;
+    }
+    .dev-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      margin:10px 0;
+    }
+    .ball-btn{
+      width:36px;
+      height:36px;
+      border-radius:50%;
+      border:2px solid #000;
+      background:#ffe500;
+      color:#000;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .ball-btn.active{
+      outline:3px solid #1aa3e8;
+    }
+    .ball-btn.empty{opacity:.35;}
+    .dev-note{
+      font-size:12px;
+      color:#aaa;
+      line-height:1.6;
+    }
+    .dev-actions button{
+      border:0;
+      border-radius:8px;
+      padding:10px 12px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .btn-gps{background:#0fa355;color:#fff;}
+    .btn-save{background:#ffe500;color:#000;}
+    .btn-copy{background:#1aa3e8;color:#fff;}
+    .btn-clear{background:#444;color:#fff;}
+    .dev-coords{
+      font-size:11px;
+      white-space:pre-wrap;
+      background:#111;
+      border-radius:8px;
+      padding:8px;
+      color:#9f9;
+    }
+
+    .ball-setting-box {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+    .ball-setting-box input {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
+    .qr-scan-btn {
+      display: none;
+      margin-top: 10px;
+      width: min(92vw, 400px);
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #0fa355, #12ba62);
+      color: #fff;
+      font-family: "Noto Sans JP", sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      border: 2px solid #ffe500;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(15, 163, 85, 0.4);
+      cursor: pointer;
+      touch-action: manipulation;
+      z-index: 15;
+    }
+    .qr-scan-btn.show {
+      display: block;
+    }
+
+    /* ARカメラモーダル＆ポップアップUI */
+    .ar-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      z-index: 10000;
+      background: #000;
+      isolation: isolate;
+    }
+    .ar-modal.open { display: block; }
+    #arContainer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+    #arContainer a-scene {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      overflow: hidden !important;
+      z-index: 1 !important;
+      background: transparent !important;
+    }
+    #arContainer canvas.a-canvas {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      z-index: 2 !important;
+      pointer-events: auto !important;
+    }
+    .ar-modal .arjs-video {
+      position: absolute !important;
+      inset: 0 !important;
+      display: block !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      z-index: 0 !important;
+      background: #000;
+      pointer-events: none !important;
+    }
+    .ar-status {
+      position: fixed;
+      left: 50%;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 10002;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.78);
+      color: #fff;
+      font: 700 14px/1.5 "Noto Sans JP", sans-serif;
+      text-align: center;
+      pointer-events: none;
+    }
+    .ar-status.error { background: rgba(150,0,0,.88); }
+    .ar-close-btn {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      right: max(16px, env(safe-area-inset-right));
+      z-index: 10003;
+      padding: 10px 20px;
+      background: #ff4b3f;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      touch-action: manipulation;
+    }
+
+    /* GET!!ポップアップUI */
+    #get-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.3);
+      background: linear-gradient(135deg, #ffaa00 0%, #ff3300 100%);
+      color: #ffffff;
+      padding: 24px 48px;
+      border-radius: 28px;
+      border: 4px solid #fffb00;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.65), 0 0 35px rgba(255, 204, 0, 0.9);
+      font-size: 36px;
+      font-weight: 900;
+      text-align: center;
+      text-shadow: 2px 3px 6px rgba(0,0,0,0.7);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 20000;
+      pointer-events: auto;
+      width: min(85vw, 360px);
+      cursor: pointer;
+    }
+    #get-toast.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .toast-title {
+      font-size: 28px;
+      color: #fffb00;
+      text-shadow: 1px 2px 4px rgba(0,0,0,0.8);
+      margin-bottom: 6px;
+    }
+    .toast-main {
+      font-size: 46px;
+      letter-spacing: 2px;
+      color: #ffffff;
+      text-shadow: 2px 3px 6px rgba(0,0,0,0.8);
+    }
+
+    /* Complete!! クリア画面オーバーレイの追加スタイル */
+    .complete-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 30000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    .complete-overlay.show {
+      display: flex;
+      opacity: 1;
+    }
+    .complete-content {
+      position: relative;
+      text-align: center;
+      width: min(90vw, 500px);
+    }
+    .complete-shenron-img {
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 0 30px rgba(255, 230, 91, 0.6);
+    }
+    .complete-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: "Archivo Black", Impact, sans-serif;
+      font-size: clamp(36px, 10vw, 64px);
+      color: #ffe65b;
+      text-shadow: 
+        -2px 2px 0 #000,
+         2px 2px 0 #000,
+         2px -2px 0 #000,
+        -2px -2px 0 #000,
+        0 0 20px rgba(255, 100, 0, 0.8);
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    /* VR/ARデフォルトボタンの完全非表示 */
+    .a-enter-vr-button,
+    .a-enter-ar-button {
+      display: none !important;
+    }
+
+    @media (max-height:700px){
+      .logo{margin-bottom:2px;}
+      .logo-ja{margin-top:2px;}
+      .radar-shell{margin-top:14px;width:min(98vw, 560px, calc(100dvh - 100px));}
+      .gps-status{margin-top:2px;}
+    }
+  </style>
+</head>
+<body>
+  <!-- GET!!ポップアップUI -->
+  <div id="get-toast">
+    <div id="toast-ball-name" class="toast-title">一星球</div>
+    <div class="toast-main">GET!!</div>
+  </div>
+
+  <!-- Complete!! クリア画面オーバーレイ -->
+  <div class="complete-overlay" id="completeOverlay">
+    <div class="complete-content">
+      <img src="shenron.png" alt="神龍" class="complete-shenron-img">
+      <div class="complete-text">Complete!!</div>
+    </div>
+  </div>
+
+  <div class="app" id="appMain">
+    <div class="logo">
+      <div class="logo-en">
+        <span class="word blue"><span>D</span><span>R</span><span>A</span><span>G</span><span>O</span><span>N</span></span>
+        <span class="word red" id="radarLogo"><span>R</span><span>A</span><span>D</span><span>A</span><span>R</span></span>
+      </div>
+      <div class="logo-ja">
+        <span class="circle">ド</span>
+        <span class="circle">ラ</span>
+        <span class="circle">ゴ</span>
+        <span class="circle">ン</span>
+        <span class="circle">レ</span>
+        <span class="circle">ー</span>
+        <span class="circle">ダ</span>
+        <span class="circle">ー</span>
+      </div>
+    </div>
+
+    <div class="radar-shell">
+      <div class="knob-art" aria-hidden="true"></div>
+      <div class="top-knob" id="scanBtn" role="button" aria-label="スキャン" tabindex="0"></div>
+      <div class="screen-wrap">
+        <div class="screen" id="screen">
+          <div class="scan"></div>
+          <div class="center-glow"></div>
+          <div class="center-dot"></div>
+          <div class="target-dot t1" data-id="1"></div>
+          <div class="target-dot t2" data-id="2"></div>
+          <div class="target-dot t3" data-id="3"></div>
+          <div class="target-dot t4" data-id="4"></div>
+          <div class="target-dot t5" data-id="5"></div>
+          <div class="target-dot t6" data-id="6"></div>
+          <div class="target-dot t7" data-id="7"></div>
+        </div>
+      </div>
+    </div>
+    <div class="gps-status" id="gpsStatus"></div>
+    <!-- コレクションUI (1〜7のインジケーター) -->
+    <div class="collection-bar" id="collectionBar">
+      <div class="col-badge" data-col="1">①</div>
+      <div class="col-badge" data-col="2">②</div>
+      <div class="col-badge" data-col="3">③</div>
+      <div class="col-badge" data-col="4">④</div>
+      <div class="col-badge" data-col="5">⑤</div>
+      <div class="col-badge" data-col="6">⑥</div>
+      <div class="col-badge" data-col="7">⑦</div>
+    </div>
+    <button class="qr-scan-btn" id="qrScanBtn" type="button">カメラでドラゴンボールをのぞく</button>
+  </div>
+
+  <div class="dev-panel" id="devPanel">
+    <div class="dev-head">
+      <h2>BALL LOCATIONS & IMAGES</h2>
+      <button class="dev-close" id="devClose" type="button">閉じる</button>
+    </div>
+    <p class="dev-note">星の番号を選んでから地図をタップすると位置が設定されます。それぞれのドラゴンボール画像ファイル名も個別に指定できます。</p>
+    <div class="dev-row" id="ballBtns"></div>
+    <div class="ball-setting-box" id="selectedBallConfig"></div>
+    <div id="devMap"></div>
+    <div class="dev-row">
+      <label>レーダー範囲
+        <input id="rangeInput" type="number" min="50" max="20000" step="50" value="500" style="width:90px;margin-left:6px;"> m
+      </label>
+    </div>
+    <div class="dev-row dev-actions">
+      <button class="btn-gps" id="gpsBtn" type="button">現在地を取得</button>
+      <button class="btn-save" id="saveBtn" type="button">この端末に保存</button>
+      <button class="btn-copy" id="copyBtn" type="button">balls.jsonをコピー</button>
+      <button class="btn-clear" id="clearBtn" type="button">位置を全削除</button>
+    </div>
+    <div class="dev-coords" id="devCoords"></div>
+  </div>
+
+  <!-- ARカメラモーダル -->
+  <div class="ar-modal" id="arModal" aria-label="ARマーカー読み取り画面">
+    <div id="arContainer"></div>
+    <div class="ar-status" id="arStatus" role="status" aria-live="polite">カメラを準備しています…</div>
+    <button class="ar-close-btn" id="arCloseBtn" type="button">閉じる</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const STORAGE_KEY = "dragonRadarConfig";
+    const isSecure = window.isSecureContext === true;
+    const btn = document.getElementById("scanBtn");
+    const screen = document.getElementById("screen");
+    const gpsStatus = document.getElementById("gpsStatus");
+    const dots = [...document.querySelectorAll(".target-dot")];
+
+    const appMain = document.getElementById("appMain");
+    const qrScanBtn = document.getElementById("qrScanBtn");
+    const arModal = document.getElementById("arModal");
+    const arCloseBtn = document.getElementById("arCloseBtn");
+    const arContainer = document.getElementById("arContainer");
+    const arStatus = document.getElementById("arStatus");
+    let arStarting = false;
+    let arStartTimeout = null;
+    let arCameraReady = false;
+    let arCameraInitHandler = null;
+    let arCameraErrorHandler = null;
+    let arVideoObserver = null;
+
+    const defaultConfig = () => ({
+      rangeMeters: 500,
+      balls: [
+        {id: 1, lat: null, lng: null, image: "dragonball1.png", name: "一星球", collected: false},
+        {id: 2, lat: null, lng: null, image: "dragonball2.png", name: "二星球", collected: false},
+        {id: 3, lat: null, lng: null, image: "dragonball3.png", name: "三星球", collected: false},
+        {id: 4, lat: null, lng: null, image: "dragonball4.png", name: "四星球", collected: false},
+        {id: 5, lat: null, lng: null, image: "dragonball5.png", name: "五星球", collected: false},
+        {id: 6, lat: null, lng: null, image: "dragonball6.png", name: "六星球", collected: false},
+        {id: 7, lat: null, lng: null, image: "dragonball7.png", name: "七星球", collected: false}
+      ]
+    });
+    let config = defaultConfig();
+    let userPos = null;
+    let audioCtx = null;
+    let busy = false;
+    let ballsTimer = null;
+    let ballsShown = false;
+    let watchId = null;
+    let selectedBall = 1;
+    let map = null, markers = {}, userMarker = null;
+    let beepTimer = null;
+    
+    let normalBlinkTimer = null;
+    let fastBlinkTimer = null;
+    let normalBlinkState = true;
+    let fastBlinkState = true;
+
+    // コレクションUI（画面下の①〜⑦）の表示を更新
+    function updateCollectionUI() {
+      config.balls.forEach(ball => {
+        const badge = document.querySelector(`.col-badge[data-col="${ball.id}"]`);
+        if(badge) {
+          if(ball.collected) {
+            badge.classList.add("collected");
+          } else {
+            badge.classList.remove("collected");
+          }
+        }
+      });
+    }
+
+    function startBlinkTimers(){
+      if(!normalBlinkTimer){
+        normalBlinkTimer = setInterval(() => {
+          normalBlinkState = !normalBlinkState;
+          dots.forEach(dot => {
+            if(dot.classList.contains("fast-blink")) return;
+            if(!dot.classList.contains("show")) return;
+            dot.classList.toggle("blink-off", !normalBlinkState);
+          });
+        }, 1700);
+      }
+      if(!fastBlinkTimer){
+        fastBlinkTimer = setInterval(() => {
+          fastBlinkState = !fastBlinkState;
+          dots.forEach(dot => {
+            if(!dot.classList.contains("fast-blink")) return;
+            if(!dot.classList.contains("show")) return;
+            dot.classList.toggle("blink-off", !fastBlinkState);
+          });
+        }, 500);
+      }
+    }
+
+    let gpsInitialized = false;
+    let orientationPermissionGranted = false;
+    let headingOffset = 0;
+    let latestAlpha = null;
+
+    function setGpsStatus(text, type){
+      gpsStatus.textContent = text;
+      gpsStatus.classList.remove("ok", "ng", "wait");
+      if(type) gpsStatus.classList.add(type);
+    }
+    function toRad(d){ return d * Math.PI / 180; }
+    function distanceMeters(aLat, aLng, bLat, bLng){
+      const R = 6371000;
+      const dLat = toRad(bLat - aLat);
+      const dLng = toRad(bLng - aLng);
+      const s = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+    }
+    function bearingDeg(aLat, aLng, bLat, bLng){
+      const y = Math.sin(toRad(bLng - aLng)) * Math.cos(toRad(bLat));
+      const x = Math.cos(toRad(aLat))*Math.sin(toRad(bLat)) - Math.sin(toRad(aLat))*Math.cos(toRad(bLat))*Math.cos(toRad(bLng - aLng));
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+    function configJSON(){
+      return JSON.stringify({rangeMeters: Number(config.rangeMeters)||500, balls: config.balls}, null, 2);
+    }
+
+    function applyUserPosition(lat, lng){
+      userPos = {lat, lng};
+      placeBallsOnRadar();
+      updateUserMarker(lat, lng);
+    }
+
+    function updateUserMarker(lat, lng){
+      if(!map) return;
+      if(userMarker){
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        userMarker = L.marker([lat, lng], {
+          title: "現在地",
+          icon: L.divIcon({
+            className: 'user-pin',
+            html: '<div style="width:16px;height:16px;background:#1aa3e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.6);"></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        }).addTo(map).bindPopup("あなたの現在地");
+      }
+    }
+
+    function placeBallsOnRadar(){
+      if(!userPos) return;
+      const range = Number(config.rangeMeters) || 500;
+      
+      let closestBallIndex = -1;
+      let minDst = Infinity;
+
+      config.balls.forEach((ball, i) => {
+        // 既に取得済み、または位置未設定のボールはレーダーに表示しない
+        if(ball.collected || ball.lat == null || ball.lng == null) return;
+        const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
+        if(dist <= range){
+          if(dist < minDst){
+            minDst = dist;
+            closestBallIndex = i;
+          }
+        }
+      });
+
+      let overlappingCount = 0;
+
+      config.balls.forEach((ball, i) => {
+        const dot = dots[i];
+        if(!dot) return;
+        if(ball.collected || ball.lat == null || ball.lng == null){
+          dot.classList.remove("show", "fast-blink", "blink-off");
+          return;
+        }
+        const dist = distanceMeters(userPos.lat, userPos.lng, ball.lat, ball.lng);
+        if(dist > range){
+          dot.classList.remove("show", "fast-blink", "blink-off");
+          return;
+        }
+        const rawBrng = bearingDeg(userPos.lat, userPos.lng, ball.lat, ball.lng);
+        const adjustedBrng = (rawBrng - headingOffset + 360) % 360;
+        const brngRad = toRad(adjustedBrng);
+
+        const r = (dist / range) * 42;
+        const left = 50 + Math.sin(brngRad) * r;
+        const top = 50 - Math.cos(brngRad) * r;
+        dot.style.left = left + "%";
+        dot.style.top = top + "%";
+        
+        const centerDist = Math.sqrt((left - 50) ** 2 + (top - 50) ** 2);
+        
+        if(i === closestBallIndex && centerDist < 5.2){
+          dot.classList.add("fast-blink");
+          dot.classList.toggle("blink-off", !fastBlinkState);
+          overlappingCount++;
+        } else {
+          dot.classList.remove("fast-blink");
+          dot.classList.toggle("blink-off", !normalBlinkState);
+        }
+        
+        if(ballsShown) dot.classList.add("show");
+      });
+
+      if (overlappingCount > 0) {
+        qrScanBtn.classList.add("show");
+        if (!beepTimer) {
+          playRadarBeep();
+          beepTimer = setInterval(() => {
+            playRadarBeep();
+          }, 1000);
+        }
+      } else {
+        qrScanBtn.classList.remove("show");
+        if (beepTimer) {
+          clearInterval(beepTimer);
+          beepTimer = null;
+        }
+      }
+    }
+
+    async function loadConfig(){
+      let loaded = null;
+      try{
+        const res = await fetch("balls.json", {cache:"no-store"});
+        if(res.ok) loaded = await res.json();
+      }catch(e){}
+      try{
+        const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        if(local && local.balls) loaded = local;
+      }catch(e){}
+      if(loaded && Array.isArray(loaded.balls)){
+        config.rangeMeters = Number(loaded.rangeMeters) || 500;
+        const def = defaultConfig();
+        config.balls = def.balls.map(dBall => {
+          const found = loaded.balls.find(b => Number(b.id) === dBall.id) || {};
+          return {
+            id: dBall.id,
+            lat: found.lat ?? null,
+            lng: found.lng ?? null,
+            image: found.image || dBall.image,
+            name: found.name || dBall.name,
+            collected: Boolean(found.collected)
+          };
+        });
+      }
+      updateCollectionUI();
+    }
+
+    function ensureAudio(){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return null;
+      if(!audioCtx) audioCtx = new AC();
+      if(audioCtx.state === "suspended") audioCtx.resume();
+      return audioCtx;
+    }
+    
+    function unlockAudioContext() {
+      const ctx = ensureAudio();
+      if(!ctx) return;
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch(e) {}
+    }
+
+    function playPochitt(){
+      const ctx = ensureAudio();
+      if(!ctx) return;
+      const t = ctx.currentTime;
+      const click = ctx.createOscillator();
+      const clickGain = ctx.createGain();
+      click.type = "square";
+      click.frequency.value = 1400;
+      clickGain.gain.setValueAtTime(0.18, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+      click.connect(clickGain);
+      clickGain.connect(ctx.destination);
+      click.start(t);
+      click.stop(t + 0.03);
+      const thud = ctx.createOscillator();
+      const thudGain = ctx.createGain();
+      thud.type = "sine";
+      thud.frequency.setValueAtTime(220, t);
+      thud.frequency.exponentialRampToValueAtTime(70, t + 0.09);
+      thudGain.gain.setValueAtTime(0.28, t);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+      thud.connect(thudGain);
+      thudGain.connect(ctx.destination);
+      thud.start(t);
+      thud.stop(t + 0.12);
+    }
+
+    function playRadarBeep() {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(2200, t);
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.05);
+    }
+
+    function playGetSound() {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.07);
+        osc.frequency.setValueAtTime(783.99, now + 0.14);
+        osc.frequency.setValueAtTime(1046.50, now + 0.21);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      } catch (e) {}
+    }
+
+    let toastTimeout = null;
+    function showGetEffect(ballId, ballName, visualEl) {
+      const toast = document.getElementById('get-toast');
+      const nameEl = document.getElementById('toast-ball-name');
+      nameEl.textContent = ballName;
+      toast.classList.add('show');
+      playGetSound();
+      if (navigator.vibrate) {
+        try { navigator.vibrate([80, 40, 80]); } catch(e) {}
+      }
+      if (visualEl) {
+        visualEl.setAttribute('animation__pop', {
+          property: 'scale',
+          from: '1.4 1.4 1.4',
+          to: '1.0 1.0 1.0',
+          dur: 350,
+          easing: 'easeOutBack'
+        });
+      }
+
+      // ボールをゲット済みに更新して保存
+      const targetBall = config.balls.find(b => b.id === ballId);
+      if(targetBall) {
+        targetBall.collected = true;
+        localStorage.setItem(STORAGE_KEY, configJSON());
+        updateCollectionUI();
+      }
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      
+      // 3秒後に自動でARカメラを閉じ、メイン画面に戻る（またはコンプリートなら神龍画面へ）
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+        closeARView();
+      }, 3000);
+    }
+
+    function closeARView() {
+      arModal.classList.remove("open");
+      cleanupAR();
+      arStatus.classList.remove("error");
+      arStatus.textContent = "カメラを準備しています…";
+      arStatus.style.display = "block";
+      
+      // すべて揃っている（7個すべてcollectedがtrue）かチェック
+      const isComplete = config.balls.every(b => b.collected);
+      if (isComplete) {
+        appMain.classList.add("hidden");
+        const completeOverlay = document.getElementById("completeOverlay");
+        if (completeOverlay) {
+          completeOverlay.classList.add("show");
+        }
+      } else {
+        appMain.classList.remove("hidden");
+        placeBallsOnRadar();
+      }
+    }
+
+    // クリック・タップ可能なARコンポーネントの登録
+    AFRAME.registerComponent('dragonball-clickable', {
+      schema: { 
+        id: { type: 'number', default: 1 },
+        name: { type: 'string', default: 'ドラゴンボール' } 
+      },
+      init: function () {
+        const el = this.el;
+        const ballId = this.data.id;
+        const ballName = this.data.name;
+        this.triggerGet = () => {
+          const visualBall = el.querySelector('.visual-ball');
+          showGetEffect(ballId, ballName, visualBall || el);
+        };
+        this.el.addEventListener('click', () => { this.triggerGet(); });
+        this.el.addEventListener('touchstart', (evt) => {
+          evt.preventDefault();
+          this.triggerGet();
+        }, { passive: false });
+      }
+    });
+
+    function showBallsLater(){
+      if(ballsShown || ballsTimer) return;
+      ballsTimer = setTimeout(() => {
+        ballsShown = true;
+        screen.classList.add("balls");
+        placeBallsOnRadar();
+        startBlinkTimers();
+        ballsTimer = null;
+      }, 3000);
+    }
+    function geoErrorMessage(err){
+      const code = err && err.code;
+      if(code === 1) return "位置情報：拒否されました";
+      if(code === 2) return "位置情報：取得できませんでした";
+      if(code === 3) return "位置情報：タイムアウトしました";
+      return "位置情報：取得できませんでした";
+    }
+    function startWatch(){
+      if(watchId != null || !navigator.geolocation) return;
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => applyUserPosition(pos.coords.latitude, pos.coords.longitude),
+        () => {},
+        {enableHighAccuracy:false, maximumAge:60000}
+      );
+    }
+
+    function scanHeading(){
+      setGpsStatus("方位をスキャンしています…", "wait");
+      const executeScan = () => {
+        const tempListener = (event) => {
+          if(event.alpha != null){
+            latestAlpha = event.alpha;
+            headingOffset = latestAlpha;
+            placeBallsOnRadar();
+            setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+            window.removeEventListener('deviceorientation', tempListener);
+          }
+        };
+        window.addEventListener('deviceorientation', tempListener);
+        setTimeout(() => {
+          window.removeEventListener('deviceorientation', tempListener);
+          if(latestAlpha != null){
+            headingOffset = latestAlpha;
+            placeBallsOnRadar();
+            setGpsStatus("方位スキャン完了：現在地を同期しました", "ok");
+          } else {
+            setGpsStatus("方位データを取得できませんでした（端末を少し動かしてみてください）", "ng");
+          }
+        }, 400);
+      };
+
+      if (orientationPermissionGranted || typeof DeviceOrientationEvent === 'undefined' || typeof DeviceOrientationEvent.requestPermission !== 'function') {
+        executeScan();
+        return;
+      }
+      DeviceOrientationEvent.requestPermission()
+        .then(response => {
+          if (response === 'granted') {
+            orientationPermissionGranted = true;
+            executeScan();
+          } else {
+            setGpsStatus("方位センサーの許可が拒否されました", "ng");
+          }
+        })
+        .catch(() => { executeScan(); });
+    }
+
+    function handleScanButton(){
+      if(busy) return;
+      busy = true;
+      unlockAudioContext();
+      playPochitt();
+
+      if(!gpsInitialized){
+        if(!isSecure){
+          setGpsStatus("HTTPSのページではないため、位置情報の許可画面を出せません", "ng");
+          busy = false;
+          return;
+        }
+        if(!navigator.geolocation){
+          setGpsStatus("This device does not support location info", "ng");
+          busy = false;
+          return;
+        }
+        setGpsStatus("位置情報の許可を確認しています…", "wait");
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            applyUserPosition(pos.coords.latitude, pos.coords.longitude);
+            setGpsStatus("位置情報：取得完了（タップで方位スキャン）", "ok");
+            screen.classList.add("on");
+            showBallsLater();
+            startWatch();
+            gpsInitialized = true;
+            busy = false;
+          },
+          (err) => {
+            setGpsStatus(geoErrorMessage(err), "ng");
+            screen.classList.remove("on");
+            busy = false;
+          },
+          {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
+        );
+      } else {
+        scanHeading();
+        busy = false;
+      }
+    }
+
+    function setARStatus(message, isError = false) {
+      arStatus.textContent = message;
+      arStatus.classList.toggle("error", isError);
+      arStatus.style.display = "block";
+    }
+
+    function adoptARVideo() {
+      document.querySelectorAll("video.arjs-video").forEach((video) => {
+        if (video.parentElement !== arModal) {
+          arModal.insertBefore(video, arContainer);
+        }
+        video.setAttribute("playsinline", "");
+        video.setAttribute("autoplay", "");
+        video.muted = true;
+      });
+    }
+
+    function cleanupAR() {
+      if (arVideoObserver) {
+        arVideoObserver.disconnect();
+        arVideoObserver = null;
+      }
+      if (arStartTimeout) {
+        clearTimeout(arStartTimeout);
+        arStartTimeout = null;
+      }
+      if (arCameraInitHandler) {
+        window.removeEventListener("camera-init", arCameraInitHandler);
+        arCameraInitHandler = null;
+      }
+      if (arCameraErrorHandler) {
+        window.removeEventListener("camera-error", arCameraErrorHandler);
+        arCameraErrorHandler = null;
+      }
+
+      document.querySelectorAll(".arjs-video, #arContainer video").forEach((video) => {
+        try { video.pause(); } catch (e) {}
+        try {
+          if (video.srcObject && typeof video.srcObject.getTracks === "function") {
+            video.srcObject.getTracks().forEach(track => track.stop());
+          }
+        } catch (e) {}
+        try { video.srcObject = null; } catch (e) {}
+        try { video.remove(); } catch (e) {}
+      });
+
+      const scene = arContainer.querySelector("a-scene");
+      if (scene) {
+        try { if (scene.renderer) scene.renderer.dispose(); } catch (e) {}
+        try { if (scene.pause) scene.pause(); } catch (e) {}
+      }
+      arContainer.innerHTML = "";
+      arCameraReady = false;
+      arStarting = false;
+    }
+
+    async function startAR() {
+      if (arStarting) return;
+      arStarting = true;
+      arCameraReady = false;
+      unlockAudioContext();
+      playPochitt();
+
+      if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        appMain.classList.add("hidden");
+        arModal.classList.add("open");
+        setARStatus("カメラを使うにはHTTPSのページを、対応ブラウザで開いてください。", true);
+        arStarting = false;
+        return;
+      }
+
+      appMain.classList.add("hidden");
+      arModal.classList.add("open");
+      setARStatus("カメラの許可を確認しています…");
+      
+      let permissionTestStream = null;
+      try {
+        permissionTestStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+      } catch (error) {
+        const name = error && error.name ? error.name : "";
+        let message = "カメラを利用できません。スマホの設定でこのサイトのカメラ使用を許可してください。";
+        if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+          message = "カメラの許可が拒否されています。サイト設定でカメラを「許可」に変更してください。";
+        }
+        setARStatus(message, true);
+        arStarting = false;
+        return;
+      } finally {
+        if (permissionTestStream) {
+          permissionTestStream.getTracks().forEach(track => track.stop());
+        }
+      }
+
+      arCameraInitHandler = () => {
+        adoptARVideo();
+        arCameraReady = true;
+        setARStatus("カメラ起動済みです。ターゲットマーカーを画面に映してください。");
+        if (arStartTimeout) {
+          clearTimeout(arStartTimeout);
+          arStartTimeout = null;
+        }
+      };
+      arCameraErrorHandler = (event) => {
+        const detail = event && event.detail;
+        const reason = detail && (detail.error || detail.message);
+        setARStatus("ARがカメラ映像を開始できませんでした。" + (reason ? " 詳細: " + String(reason) : ""), true);
+      };
+      window.addEventListener("camera-init", arCameraInitHandler);
+      window.addEventListener("camera-error", arCameraErrorHandler);
+
+      arVideoObserver = new MutationObserver(() => adoptARVideo());
+      arVideoObserver.observe(document.body, { childList: true, subtree: true });
+
+      // 未取得のボールのみ、またはすべてのターゲットに対応するARエンティティを生成
+      const targetsHTML = config.balls.map((b, index) => {
+        // すでに取得済みの場合はAR上で非表示、またはインタラクション無効化も可能ですがそのまま描画します
+        if (b.collected) return '';
+        return `
+        <a-entity mindar-image-target="targetIndex: ${index}">
+          <a-plane 
+            class="raycastable"
+            dragonball-clickable="id: ${b.id}; name: ${b.name || (b.id + '星球')}"
+            position="0 0 0.08" 
+            height="3.2" 
+            width="3.2" 
+            material="transparent: true; opacity: 0.001;"
+            animation="property: position; to: 0 0 0.22; dir: alternate; loop: true; dur: 2000; easing: easeInOutSine">
+            <a-plane 
+              class="visual-ball"
+              src="${b.image || ('dragonball' + b.id + '.png')}" 
+              position="0 0 0.01" 
+              height="2.5" 
+              width="2.5" 
+              material="transparent: true; alphaTest: 0.5;">
+            </a-plane>
+          </a-plane>
+        </a-entity>
+      `;
+      }).join("\n");
+
+      arContainer.innerHTML = `
+        <a-scene
+          mindar-image="imageTargetSrc: ./targets.mind;"
+          embedded
+          color-space="sRGB" 
+          renderer="colorManagement: true, physicallyCorrectLights" 
+          vr-mode-ui="enabled: false" 
+          device-orientation-permission-ui="enabled: false"
+          raycaster="objects: .raycastable"
+          style="width:100%;height:100%;">
+
+          <a-camera 
+            position="0 0 0" 
+            look-controls="enabled: false" 
+            raycaster="objects: .raycastable; far: 1000;" 
+            cursor="fuse: false; rayOrigin: mouse">
+          </a-camera>
+
+          ${targetsHTML}
+        </a-scene>`;
+
+      requestAnimationFrame(() => adoptARVideo());
+      setTimeout(adoptARVideo, 300);
+      setTimeout(adoptARVideo, 1000);
+
+      arStartTimeout = setTimeout(() => {
+        if (!arCameraReady) {
+          setARStatus("カメラの起動に時間がかかっています。接続状態を確認してください。", true);
+        }
+      }, 12000);
+    }
+
+    qrScanBtn.addEventListener("click", startAR);
+
+    arCloseBtn.addEventListener("click", () => {
+      closeARView();
+    });
+
+    // 画面タップ・クリックのダイレクトフォールバック (スマホ対応)
+    window.addEventListener('touchend', (e) => {
+      const scene = arContainer.querySelector('a-scene');
+      if (!arModal.classList.contains('open') || !scene || !scene.camera) return;
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const camera = scene.camera;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const clickableEls = document.querySelectorAll('.raycastable');
+        const objectsToTest = [];
+        clickableEls.forEach(el => { if (el.object3D) objectsToTest.push(el.object3D); });
+        const intersects = raycaster.intersectObjects(objectsToTest, true);
+        if (intersects.length > 0) {
+          let hitObj = intersects[0].object;
+          while (hitObj) {
+            if (hitObj.el && hitObj.el.components && hitObj.el.components['dragonball-clickable']) {
+              hitObj.el.components['dragonball-clickable'].triggerGet();
+              break;
+            }
+            hitObj = hitObj.parent;
+          }
+        }
+      }
+    }, { passive: true });
+
+    document.getElementById('get-toast').addEventListener('click', function() {
+      this.classList.remove('show');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      closeARView();
+    });
+
+    function pressOn(){ btn.classList.add("pressed"); document.querySelector(".radar-shell").classList.add("knob-pressed"); }
+    function pressOff(){ btn.classList.remove("pressed"); document.querySelector(".radar-shell").classList.remove("knob-pressed"); }
+    
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); pressOn(); });
+    btn.addEventListener("pointerup", () => { pressOff(); handleScanButton(); });
+    btn.addEventListener("pointercancel", pressOff);
+    btn.addEventListener("pointerleave", pressOff);
+    btn.addEventListener("keydown", (e) => {
+      if(e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        pressOn();
+        handleScanButton();
+        setTimeout(pressOff, 90);
+      }
+    });
+
+    function renderDevCoords(){
+      const el = document.getElementById("devCoords");
+      el.textContent = config.balls.map(b => {
+        const status = b.collected ? " [GET済]" : "";
+        const n = b.id + "つ星 (" + b.image + ")" + status;
+        return b.lat == null ? n + " : 未設定" : n + " : " + b.lat.toFixed(6) + ", " + b.lng.toFixed(6);
+      }).join("\n");
+    }
+
+    function renderSelectedBallConfig() {
+      const box = document.getElementById("selectedBallConfig");
+      const ball = config.balls.find(b => b.id === selectedBall);
+      if(!ball) return;
+      box.innerHTML = `
+        <div style="font-size:13px; font-weight:700; margin-bottom:6px; color:#ffe500;">
+          ${ball.id}つ星 の設定 ${ball.collected ? '(取得済み)' : ''}
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:12px;">画像: 
+            <input type="text" id="ballImageInput" value="${ball.image || ''}" placeholder="dragonball1.png" style="width:140px;">
+          </label>
+          <button type="button" id="toggleCollectBtn" style="background:${ball.collected ? '#ff4b3f' : '#0fa355'}; color:#fff; border:0; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;">
+            ${ball.collected ? '未取得に戻す' : '強制GET済みにする'}
+          </button>
+        </div>
+      `;
+      const input = document.getElementById("ballImageInput");
+      input.oninput = (e) => {
+        ball.image = e.target.value;
+        renderDevCoords();
+      };
+      const toggleBtn = document.getElementById("toggleCollectBtn");
+      toggleBtn.onclick = () => {
+        ball.collected = !ball.collected;
+        localStorage.setItem(STORAGE_KEY, configJSON());
+        updateCollectionUI();
+        syncBallBtns();
+        renderDevCoords();
+        placeBallsOnRadar();
+      };
+    }
+
+    function syncBallBtns(){
+      document.querySelectorAll(".ball-btn").forEach(btnEl => {
+        const id = Number(btnEl.dataset.id);
+        const ball = config.balls.find(b => b.id === id);
+        btnEl.classList.toggle("active", id === selectedBall);
+        btnEl.classList.toggle("empty", !(ball && ball.lat != null));
+        if (ball && ball.collected) {
+          btnEl.style.border = "2px solid #7dff9a";
+        } else {
+          btnEl.style.border = "2px solid #000";
+        }
+      });
+      renderSelectedBallConfig();
+    }
+
+    function upsertMarker(ball){
+      if(!map || ball.lat == null) return;
+      // 取得済みの場合はマップ上のマーカーを削除
+      if(ball.collected) {
+        if(markers[ball.id]) {
+          map.removeLayer(markers[ball.id]);
+          delete markers[ball.id];
+        }
+        return;
+      }
+      if(markers[ball.id]){
+        markers[ball.id].setLatLng([ball.lat, ball.lng]);
+        return;
+      }
+      markers[ball.id] = L.marker([ball.lat, ball.lng], {title: ball.id + "つ星"}).addTo(map)
+        .bindPopup(ball.id + "つ星 (" + ball.image + ")");
+    }
+
+    function initDev(){
+      const panel = document.getElementById("devPanel");
+      const btns = document.getElementById("ballBtns");
+      const rangeInput = document.getElementById("rangeInput");
+      rangeInput.value = config.rangeMeters;
+      btns.innerHTML = "";
+      config.balls.forEach(ball => {
+        const b = document.createElement("button");
+        b.className = "ball-btn";
+        b.type = "button";
+        b.dataset.id = ball.id;
+        b.textContent = ball.id;
+        b.addEventListener("click", () => {
+          selectedBall = ball.id;
+          syncBallBtns();
+        });
+        btns.appendChild(b);
+      });
+      syncBallBtns();
+      renderDevCoords();
+
+      map = L.map("devMap").setView([35.681236, 139.767125], 14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap"
+      }).addTo(map);
+
+      if(userPos){
+        map.setView([userPos.lat, userPos.lng], 16);
+        updateUserMarker(userPos.lat, userPos.lng);
+      }
+
+      config.balls.forEach(upsertMarker);
+
+      document.getElementById("devClose").onclick = () => panel.classList.remove("open");
+
+      document.getElementById("gpsBtn").onclick = () => {
+        if(!navigator.geolocation){
+          alert("This device does not support location info");
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            applyUserPosition(lat, lng);
+            if(map) map.setView([lat, lng], 16);
+            alert("現在地を取得しました。");
+          },
+          (err) => { alert(geoErrorMessage(err)); },
+          {timeout:15000, enableHighAccuracy:false}
+        );
+      };
+
+      rangeInput.onchange = () => {
+        config.rangeMeters = Number(rangeInput.value) || 500;
+        placeBallsOnRadar();
+      };
+      document.getElementById("saveBtn").onclick = () => {
+        config.rangeMeters = Number(rangeInput.value) || 500;
+        localStorage.setItem(STORAGE_KEY, configJSON());
+        placeBallsOnRadar();
+        alert("設定をこの端末に保存しました。");
+      };
+      document.getElementById("copyBtn").onclick = async () => {
+        config.rangeMeters = Number(rangeInput.value) || 500;
+        const text = configJSON();
+        try{
+          await navigator.clipboard.writeText(text);
+          alert("balls.json の内容をコピーしました。");
+        }catch(e){
+          prompt("balls.json の内容", text);
+        }
+      };
+      document.getElementById("clearBtn").onclick = () => {
+        if(!confirm("7個すべての位置や取得状況をリセットしますか？")) return;
+        config = defaultConfig();
+        config.rangeMeters = Number(rangeInput.value) || 500;
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        markers = {};
+        localStorage.removeItem(STORAGE_KEY);
+        syncBallBtns();
+        renderDevCoords();
+        updateCollectionUI();
+        placeBallsOnRadar();
+      };
+
+      map.on("click", (e) => {
+        const ball = config.balls.find(b => b.id === selectedBall);
+        if(!ball) return;
+        ball.lat = e.latlng.lat;
+        ball.lng = e.latlng.lng;
+        upsertMarker(ball);
+        syncBallBtns();
+        renderDevCoords();
+        placeBallsOnRadar();
+      });
+
+      if(navigator.geolocation && !userPos){
+        navigator.geolocation.getCurrentPosition(pos => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          applyUserPosition(lat, lng);
+          if(map) map.setView([lat, lng], 16);
+        }, () => {}, {timeout:8000, enableHighAccuracy:false});
+      }
+    }
+
+    // RADARロゴ（5回連続タップで開発者パネルを開く隠しコマンド）
+    let radarClickCount = 0;
+    let radarClickTimer = null;
+    const radarLogoEl = document.getElementById("radarLogo");
+    if(radarLogoEl) {
+      radarLogoEl.addEventListener("click", () => {
+        const now = Date.now();
+        // 前回のタップから3秒以上空いた場合はカウントをリセット
+        if (radarClickTimer && (now - radarClickTimer > 3000)) {
+          radarClickCount = 0;
+        }
+        radarClickCount++;
+        radarClickTimer = now;
+
+        if (radarClickCount >= 5) {
+          radarClickCount = 0;
+          const panel = document.getElementById("devPanel");
+          if (panel) {
+            panel.classList.add("open");
+            setTimeout(() => { 
+              if(map) {
+                map.invalidateSize(); 
+                if(userPos){
+                  map.setView([userPos.lat, userPos.lng], 16);
+                  updateUserMarker(userPos.lat, userPos.lng);
+                }
+              }
+            }, 200);
+          }
+        }
+      });
+    }
+
+    loadConfig().then(() => {
+      initDev();
+    });
+
+    if(!isSecure){
+      setGpsStatus("スマホで位置情報を使うには、HTTPSのサイトで開いてください", "wait");
+    }
+  </script>
+</body>
+</html>
